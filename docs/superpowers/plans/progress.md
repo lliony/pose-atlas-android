@@ -8,6 +8,8 @@
 
 本地验收的详细差距与证据见 [acceptance.md](acceptance.md)。原始设计与 Web 基线未修改。2026-10-24 用户授权提交、推送至 `lliony/pose-atlas-android` 并发布 Beta；版本为 `1.0.0-beta.1`，说明见 [Beta 发布记录](../../releases/v1.0.0-beta.1.md)。
 
+2026-10-24 发布链路修复：远端验证此前每次都在 `android-actions/setup-android@v3` 处失败（动作默认安装已被 SDK 仓库移除的 `tools` 包，`sdkmanager` 退出 1），因此没有任何 CI 产物进入 Release。改为只安装 `platform-tools` 后 `verify` 完整通过；新增的 `release` 任务在 `v*` 标签上把 `pose-atlas-<版本>-debug.apk` 与 `SHA256SUMS.txt` 附加到对应 Release。`v1.0.0-beta.1` 预发布已从草稿状态发布，附件为安装包、校验值和三张截图。
+
 ## 实现范围
 
 - Tasks 1–2：Gradle Wrapper、API 35 工具链、Compose/Hilt、领域规则、种子、Room 事务与草稿、DataStore、导航已实现。
