@@ -1,0 +1,49 @@
+[versions]
+agp = "8.9.2"
+kotlin = "2.1.20"
+ksp = "2.1.20-1.0.32"
+hilt = "2.56.2"
+room = "2.7.1"
+compose = "2025.04.01"
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+
+[libraries]
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-icons = { module = "androidx.compose.material:material-icons-extended" }
+compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
+compose-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+activity-compose = { module = "androidx.activity:activity-compose", version = "1.10.1" }
+lifecycle-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version = "2.8.7" }
+lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version = "2.8.7" }
+navigation = { module = "androidx.navigation:navigation-compose", version = "2.8.9" }
+hilt-navigation = { module = "androidx.hilt:hilt-navigation-compose", version = "1.2.0" }
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+datastore = { module = "androidx.datastore:datastore-preferences", version = "1.1.4" }
+serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.8.1" }
+coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version = "1.10.2" }
+coil = { module = "io.coil-kt.coil3:coil-compose", version = "3.1.0" }
+exif = { module = "androidx.exifinterface:exifinterface", version = "1.4.0" }
+reorderable = { module = "sh.calvin.reorderable:reorderable", version = "2.4.3" }
+junit = { module = "junit:junit", version = "4.13.2" }
+truth = { module = "com.google.truth:truth", version = "1.4.4" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version = "1.10.2" }
+robolectric = { module = "org.robolectric:robolectric", version = "4.14.1" }
+android-test-core = { module = "androidx.test:core", version = "1.6.1" }
+android-test-junit = { module = "androidx.test.ext:junit", version = "1.2.1" }
+android-test-runner = { module = "androidx.test:runner", version = "1.6.2" }
+openai = { module = "com.aallam.openai:openai-client", version = "4.0.1" }
+ktor-okhttp = { module = "io.ktor:ktor-client-okhttp", version = "3.0.3" }
