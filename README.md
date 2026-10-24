@@ -7,6 +7,14 @@ Kotlin + Jetpack Compose 原生离线摄影姿势卡应用。Android 8.0（API 2
 已实现离线图鉴、编辑与草稿、分类与回收站、卡片册、ZIP 备份、PDF/PNG 分享和可配置 AI。当前版本为 `1.0.0-beta.1`，见 [Beta 发布说明](docs/releases/v1.0.0-beta.1.md)；安装包通过 GitHub 预发布页面提供。
 与 [设计规格](docs/superpowers/specs/2026-10-22-pose-atlas-android-design.md) 的差距和验证证据见 [验收记录](docs/superpowers/plans/acceptance.md)。
 
+## 扫码下载 Beta
+
+[![扫码下载 v1.0.0-beta.1 APK](docs/images/beta-download-qr.png)](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.1/pose-atlas-1.0.0-beta.1-debug.apk)
+
+[直接下载 APK](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.1/pose-atlas-1.0.0-beta.1-debug.apk) · [发布说明与附件](https://github.com/lliony/pose-atlas-android/releases/tag/v1.0.0-beta.1)
+
+仓库为私有，扫码后请在浏览器登录有仓库访问权限的 GitHub 账号。此安装包为调试签名 Beta 测试版。
+
 ## 构建
 
 安装 JDK 17 或 21、Android SDK Platform 35、Build Tools 35.0.0，在本机 `local.properties` 中设置 `sdk.dir`，或配置 `ANDROID_HOME`。
