@@ -53,7 +53,7 @@ AI 请求由手机直连配置的服务商，仅在主动操作时发送输入�
 
 `./gradlew assembleRelease` 开启 R8 和资源压缩。没有生产签名时输出 `app/build/outputs/apk/release/app-release-unsigned.apk`，不能直接安装。生产签名由本机 `keystore.properties` 提供 `storeFile/storePassword/keyAlias/keyPassword`，或设置对应的 `POSE_ATLAS_STORE_FILE`、`POSE_ATLAS_STORE_PASSWORD`、`POSE_ATLAS_KEY_ALIAS`、`POSE_ATLAS_KEY_PASSWORD` 环境变量。
 
-CI 配置位于 `.github/workflows/android.yml`，执行测试、Lint、构建并上传产物；目前只有本地验证结果，未声称远端 CI 已通过。
+CI 配置位于 `.github/workflows/android.yml`，执行测试、Lint、构建并上传产物。推送 `v*` 标签时，`release` 任务会在验证通过后把 Debug 包改名为 `pose-atlas-<版本>-debug.apk`，连同 `SHA256SUMS.txt` 附加到该标签对应的 GitHub Release，含 `-` 的标签自动标记为预发布。若希望 CI 产物与此前本机分发的 Debug 包使用同一证书（可覆盖安装），需在仓库 Secrets 中配置 `ANDROID_DEBUG_KEYSTORE_BASE64`（本机 `~/.android/debug.keystore` 的 Base64）；未配置时 CI 使用 runner 自带调试证书，签名不同只能卸载重装。目前只有本地验证结果，未声称远端 CI 已通过。
 
 ## 验收边界
 
