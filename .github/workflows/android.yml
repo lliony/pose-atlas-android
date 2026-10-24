@@ -46,6 +46,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: pose-atlas-debug
@@ -57,9 +58,18 @@ jobs:
           cd release
           sha256sum pose-atlas-*.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
+      - name: Collect release notes
+        run: |
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes" ]; then
+            cp "$notes" release-notes.md
+          else
+            printf '# 姿势图鉴 Android %s\n' "$GITHUB_REF_NAME" > release-notes.md
+          fi
       - uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: release-notes.md
           files: |
             release/pose-atlas-*.apk
             release/SHA256SUMS.txt
