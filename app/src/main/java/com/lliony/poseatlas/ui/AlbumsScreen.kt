@@ -12,6 +12,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import com.lliony.poseatlas.ui.components.PhotoView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,18 +27,22 @@ import java.util.UUID
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<Album?>(null) }
-    val activeCardIds = remember(state.cards) { state.cards.filterNot { it.deleted }.map { it.id }.toSet() }
+    val activeCards = remember(state.cards) { state.cards.filterNot { it.deleted }.associateBy { it.id } }
     Column {
         PageTitle("卡片册") { FilledTonalButton(onClick = { edit = Album(UUID.randomUUID().toString(), ""); name = ""; description = "" }) { Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("新建") } }
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(state.albums, key = { it.id }) { album -> Card(onClick = { open(album.id) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) { Column(Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Surface(Modifier.size(52.dp), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
-                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.CollectionsBookmark, null, tint = MaterialTheme.colorScheme.primary) }
+                    val cover = album.cardIds.firstNotNullOfOrNull { activeCards[it]?.images?.firstOrNull() }
+                    val coverModifier = Modifier.size(width = 88.dp, height = 112.dp)
+                        .clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceVariant)
+                    if (cover != null) PhotoView(cover, vm.repository.images, "${album.name}封面", coverModifier, contentScale = ContentScale.Crop)
+                    else Box(coverModifier, contentAlignment = Alignment.Center) {
+                        Text("暂无封面", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(album.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("${album.cardIds.count { it in activeCardIds }} 张卡片", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text("${album.cardIds.count { it in activeCards }} 张卡片", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         if (album.description.isNotBlank()) Text(album.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -78,8 +85,17 @@ import java.util.UUID
             items(album.cardIds, key = { it }) { cardId ->
                 val card = state.cards.find { it.id == cardId && !it.deleted }
                 if (card != null) Card(onClick = { detail(cardId) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) { Column(Modifier.padding(16.dp)) {
-                    Text(card.code, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(card.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        card.images.firstOrNull()?.let { photo ->
+                            PhotoView(photo, vm.repository.images, "${card.title}预览",
+                                Modifier.size(width = 80.dp, height = 104.dp).clip(MaterialTheme.shapes.medium)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant), contentScale = ContentScale.Crop)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(card.code, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            Text(card.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                     Row {
                         val index = album.cardIds.indexOf(cardId)
                         TextButton(onClick = { val ids = album.cardIds.toMutableList(); java.util.Collections.swap(ids, index, index - 1); save(ids) }, enabled = index > 0) { Text("上移") }

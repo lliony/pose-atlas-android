@@ -1,0 +1,5 @@
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 外围预留系统裁切空间，保持已选人物图在桌面上的构图。 -->
+    <background android:drawable="@drawable/ic_launcher_artwork" />
+    <foreground android:drawable="@android:color/transparent" />
+</adaptive-icon>

@@ -6,6 +6,8 @@ import android.animation.ValueAnimator
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +48,7 @@ import com.lliony.poseatlas.domain.model.*
 import com.lliony.poseatlas.domain.model.Card as PoseCard
 import com.lliony.poseatlas.ui.components.PhotoView
 import kotlinx.serialization.Serializable
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -238,7 +241,7 @@ import kotlinx.coroutines.withContext
                                     Modifier.align(Alignment.TopEnd).padding(8.dp).testTag("card-controls-${card.id}"),
                                 ) {
                                     IconButton(onClick = { detail(card.id) }, modifier = Modifier.size(48.dp)) {
-                                        PhotoActionIcon(Icons.Default.OpenInFull, "查看详情：${card.title}")
+                                        PhotoActionIcon(Icons.Default.NorthEast, "查看详情：${card.title}")
                                     }
                                     IconToggleButton(
                                         checked = card.id in selected,
@@ -302,11 +305,9 @@ import kotlinx.coroutines.withContext
     } }, confirmButton = { TextButton(onClick = { addingToAlbum = false }) { Text("关闭") } })
 }
 
-// 深色轮廓让透明图标在亮背景上可读，白色主体则适配暗照片。
 @Composable private fun PhotoActionIcon(icon: ImageVector, description: String?) {
-    Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
-        Icon(icon, null, modifier = Modifier.size(30.dp), tint = Color.Black.copy(alpha = 0.8f))
-        Icon(icon, description, modifier = Modifier.size(26.dp), tint = Color.White)
+    Box(Modifier.size(36.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
+        Icon(icon, description, modifier = Modifier.size(24.dp), tint = Color.White)
     }
 }
 
@@ -332,17 +333,44 @@ import kotlinx.coroutines.withContext
     val card = state.cards.find { it.id == id }
     Column {
         PageTitle(card?.title ?: "卡片不存在", back) { if (card != null && !card.deleted) TextButton(onClick = edit) { Text("编辑") } }
-        if (card != null) LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            items(card.images, key = { it.id }) { photo -> Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)) { Column(Modifier.padding(16.dp)) {
-                PhotoView(photo, vm.repository.images, card.title, Modifier.fillMaxWidth().heightIn(max = 500.dp).aspectRatio(photoAspect(photo).toFloat()))
-                NotesView(resolveNotes(card, photo))
-                OutlinedButton(onClick = { vm.action {
-                    val files = withContext(Dispatchers.IO) { vm.pdf.shareImages(card, photo, state.categories.find { it.id == card.categoryId }?.name.orEmpty()) }
-                    shareImages(context, files)
-                } }) { Text("分享此图的卡片正反面") }
-            } } }
-            if (card.privateNote.isNotBlank()) item { Text("私人备注 · 仅本机", style = MaterialTheme.typography.titleSmall); Text(card.privateNote) }
-            item { OutlinedButton(onClick = { vm.action(if (card.deleted) "已恢复卡片" else "已移入回收站") { vm.repository.mutate { setDeleted(setOf(card.id), !card.deleted) }; back() } }) { Text(if (card.deleted) "恢复卡片" else "移入回收站") } }
+        if (card != null) key(card.id) {
+            val pager = rememberPagerState(pageCount = { card.images.size })
+            val scope = rememberCoroutineScope()
+            val photo = card.images.getOrNull(pager.settledPage.coerceAtMost(card.images.lastIndex))
+            LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                if (photo != null) item {
+                    Card(shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)) {
+                        Column(Modifier.padding(16.dp)) {
+                            HorizontalPager(
+                                state = pager,
+                                key = { card.images[it].id },
+                                modifier = Modifier.testTag("detail-photo-pager").fillMaxWidth()
+                                    .heightIn(max = 500.dp).aspectRatio(photoAspect(photo).toFloat())
+                                    .clip(RoundedCornerShape(18.dp))
+                            ) { index ->
+                                PhotoView(card.images[index], vm.repository.images, "${card.title}，第 ${index + 1} 张", Modifier.fillMaxSize())
+                            }
+                            if (card.images.size > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } }, enabled = pager.currentPage > 0) {
+                                    Icon(Icons.Default.ChevronLeft, "上一张图片")
+                                }
+                                Text("${pager.settledPage + 1} / ${card.images.size}", style = MaterialTheme.typography.labelLarge)
+                                IconButton(onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } }, enabled = pager.currentPage < card.images.lastIndex) {
+                                    Icon(Icons.Default.ChevronRight, "下一张图片")
+                                }
+                            }
+                            // 教学和分享共用停稳后的照片，避免滑动途中指向不同图片。
+                            NotesView(resolveNotes(card, photo))
+                            OutlinedButton(onClick = { vm.action {
+                                val files = withContext(Dispatchers.IO) { vm.pdf.shareImages(card, photo, state.categories.find { it.id == card.categoryId }?.name.orEmpty()) }
+                                shareImages(context, files)
+                            } }) { Text("分享此图的卡片正反面") }
+                        }
+                    }
+                }
+                if (card.privateNote.isNotBlank()) item { Text("私人备注 · 仅本机", style = MaterialTheme.typography.titleSmall); Text(card.privateNote) }
+                item { OutlinedButton(onClick = { vm.action(if (card.deleted) "已恢复卡片" else "已移入回收站") { vm.repository.mutate { setDeleted(setOf(card.id), !card.deleted) }; back() } }) { Text(if (card.deleted) "恢复卡片" else "移入回收站") } }
+            }
         }
     }
 }

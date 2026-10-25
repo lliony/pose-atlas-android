@@ -16,6 +16,51 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 
 class AppDeviceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @Test fun detailPhotosSwipeAndKeepOnlyCurrentTeachingOnDevice() {
+        compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val original = vm.state.value.cards.first()
+        val photos = vm.state.value.cards.flatMap { it.images }.take(3).mapIndexed { index, photo ->
+            photo.copy(id = "detail-device-$index", notes = com.lliony.poseatlas.domain.model.Notes(pose = "第${index + 1}张独立教学"))
+        }
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        fun screenshot(name: String) {
+            compose.waitForIdle()
+            val bitmap = instrumentation.uiAutomation.takeScreenshot()
+            java.io.File(instrumentation.targetContext.getExternalFilesDir(null), name).outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        }
+        try {
+            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original.copy(images = photos)) } }
+            compose.waitUntil(10_000) { vm.state.value.cards.first { it.id == original.id }.images.first().id == photos.first().id }
+            compose.onNodeWithContentDescription("查看详情：${original.title}").performClick()
+            compose.onNodeWithTag("detail-photo-pager").assertIsDisplayed()
+            compose.onNodeWithText("1 / 3").assertExists()
+            compose.onNodeWithContentDescription("上一张图片").assertIsNotEnabled()
+            screenshot("detail-page-1.png")
+            for (page in 2..3) {
+                compose.onNodeWithTag("detail-photo-pager").performScrollTo().performTouchInput { swipeLeft() }
+                compose.waitUntil(5_000) { compose.onAllNodesWithText("$page / 3").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithText("第${page}张独立教学").performScrollTo().assertIsDisplayed()
+                compose.onNodeWithText("第${page - 1}张独立教学").assertDoesNotExist()
+                compose.onAllNodesWithText("分享此图的卡片正反面").assertCountEquals(1)
+                compose.onNodeWithTag("detail-photo-pager").performScrollTo()
+                screenshot("detail-page-$page.png")
+            }
+            compose.onNodeWithContentDescription("下一张图片").assertIsNotEnabled()
+            compose.onNodeWithTag("detail-photo-pager").performTouchInput { swipeRight() }
+            compose.waitUntil(5_000) { compose.onAllNodesWithText("2 / 3").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("第2张独立教学").performScrollTo().assertIsDisplayed()
+            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original.copy(images = photos.take(1))) } }
+            compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("下一张图片").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithText("第1张独立教学").performScrollTo().assertIsDisplayed()
+        } finally {
+            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original) } }
+        }
+    }
+
     @Test fun launchSearchAndRestoreNewCardDraft() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("搜索标题、编号、标签").performTextInput("REF-001")

@@ -104,6 +104,38 @@ class AppSmokeTest {
         return card.id
     }
 
+    @Test fun detailPhotosSwipeInOneAreaAndNotesFollowTheCurrentPhoto() {
+        val id = showRatioPhoto(160, 90)
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val card = vm.state.value.cards.first { it.id == id }
+        val photos = listOf(160 to 90, 90 to 160, 100 to 100).mapIndexed { index, (w, h) ->
+            card.images.single().copy(id = "detail-photo-$index", width = w, height = h,
+                notes = com.lliony.poseatlas.domain.model.Notes(pose = "第${index + 1}张独立教学"))
+        }
+        kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(card.copy(images = photos)) } }
+        compose.waitUntil(10_000) { vm.state.value.cards.first { it.id == id }.images.size == 3 }
+        compose.onNodeWithContentDescription("查看详情：${card.title}").performClick()
+        compose.onNodeWithTag("detail-photo-pager").assertIsDisplayed()
+        compose.onNodeWithText("1 / 3").assertExists()
+        compose.onNodeWithText("第1张独立教学").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("第2张独立教学").assertDoesNotExist()
+        compose.onNodeWithTag("detail-photo-pager").performScrollTo().performTouchInput { swipeLeft() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("2 / 3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("第2张独立教学").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("第1张独立教学").assertDoesNotExist()
+        compose.onNodeWithTag("detail-photo-pager").performScrollTo().performTouchInput { swipeLeft() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("3 / 3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("detail-photo-pager").performTouchInput { swipeRight() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("2 / 3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("分享此图的卡片正反面").assertCountEquals(1)
+        compose.onNodeWithContentDescription("下一张图片").performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("3 / 3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("下一张图片").assertIsNotEnabled()
+        kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(card.copy(images = photos.take(1))) } }
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("下一张图片").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithText("第1张独立教学").performScrollTo().assertIsDisplayed()
+    }
+
     @Test fun cardPhotoUsesItsOwnAspectAndHasRealInsets() {
         listOf(90 to 160, 100 to 100, 120 to 160, 160 to 90, 100 to 150, 160 to 120).forEach { (w, h) ->
             val id = showRatioPhoto(w, h)
