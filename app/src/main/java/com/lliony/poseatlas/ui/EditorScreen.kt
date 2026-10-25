@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
@@ -23,20 +24,30 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lliony.poseatlas.domain.logic.nextCardCode
 import com.lliony.poseatlas.domain.model.*
 import com.lliony.poseatlas.ui.components.PhotoView
+import com.lliony.poseatlas.ui.theme.AtlasAccentBrush
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-@Composable private fun AiFillBar(vm: AtlasViewModel) {
+@Composable private fun AiFillBar(vm: AtlasViewModel, modifier: Modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
     val config by vm.aiConfig.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val undo by vm.editorUndo.collectAsStateWithLifecycle()
     val profile = config.profiles.find { it.id == config.draftId }
-    Surface(tonalElevation = 2.dp) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("ai-fill-bar"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp).testTag("ai-fill-bar"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = vm::fillEditor, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                Button(
+                    onClick = vm::fillEditor, enabled = !busy,
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp).background(AtlasAccentBrush, MaterialTheme.shapes.medium),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White, disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                ) {
                     Icon(Icons.Default.AutoAwesome, null)
                     Spacer(Modifier.width(8.dp))
                     Text(if (busy) "处理中…" else "AI 填充")
@@ -78,7 +89,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
         PageTitle(if (current?.key == "new") "新建卡片" else "编辑卡片", ::close) { TextButton(onClick = { vm.saveEditor(back) }, enabled = !busy && current != null) { Text("保存") } }
         if (current == null) { LinearProgressIndicator(Modifier.fillMaxWidth()); return@Column }
         val card = current.card
-        AiFillBar(vm)
+        if (current.key != "new") AiFillBar(vm)
         val photoListState = rememberLazyListState()
         val reorder = rememberReorderableLazyListState(photoListState) { from, to ->
             val latest = vm.editor.value?.card
@@ -103,6 +114,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
                 }
             }
             Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy && card.images.size < 20) { Text("＋ 添加照片 (${card.images.size}/20)") }
+            if (current.key == "new") AiFillBar(vm, Modifier)
             val photo = card.images.getOrNull(selected)
             if (photo != null) {
                 Row(Modifier.horizontalScroll(rememberScrollState())) {

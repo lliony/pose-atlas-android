@@ -16,7 +16,7 @@ class CropFlowTest {
         val fab = compose.onNodeWithContentDescription("打开模型推荐").fetchSemanticsNode().boundsInRoot
         org.junit.Assert.assertEquals(fab.width, fab.height, 1f)
         compose.onNodeWithText("模型推荐").assertDoesNotExist()
-        compose.onNodeWithText("往前走，拍一个背影").performClick()
+        compose.onNodeWithText("往前走，拍一个背影").performScrollTo().performClick()
         compose.onNodeWithText("编辑").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("AI 填充").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("AI 填充").assertIsDisplayed()
@@ -25,6 +25,7 @@ class CropFlowTest {
         compose.onNodeWithText("裁切当前图片").performScrollTo().performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("确认裁切").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("取消裁切").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("crop-screen").fetchSemanticsNodes().isEmpty() }
         org.junit.Assert.assertEquals(original, vm.editor.value!!.card.images.first())
         compose.onNodeWithText("AI 填充").assertIsDisplayed()
         compose.onNodeWithText("裁切当前图片").performScrollTo().performClick()

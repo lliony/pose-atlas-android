@@ -7,6 +7,9 @@ Kotlin + Jetpack Compose 原生离线摄影姿势卡应用。Android 8.0（API 2
 已实现离线图鉴、编辑与草稿、分类与回收站、卡片册、ZIP 备份、PDF/PNG 分享和可配置 AI。当前版本为 `1.0.0-beta.1`，见 [Beta 发布说明](docs/releases/v1.0.0-beta.1.md)；安装包通过 GitHub 预发布页面提供。
 与 [设计规格](docs/superpowers/specs/2026-10-22-pose-atlas-android-design.md) 的差距和验证证据见 [验收记录](docs/superpowers/plans/acceptance.md)。
 
+
+文档导航见 [文档索引](docs/README.md)。
+
 ## 构建
 
 安装 JDK 17 或 21、Android SDK Platform 35、Build Tools 35.0.0，在本机 `local.properties` 中设置 `sdk.dir`，或配置 `ANDROID_HOME`。
@@ -33,7 +36,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 图鉴支持搜索、筛选、多选和翻面；编辑器支持多图、手动裁切、每图笔记、草稿恢复。上传保留原图，选中图片后可进入全屏裁切，选择比例并拖动、缩放画面，确认后应用；取消保留原图，保存失败可重试。设置中管理分类、回收站和 ZIP 导入导出。卡片册可整理卡片并生成正反面 PDF；纸张、方向和翻转设置会保存在本机。
 
-手机竖屏采用单列等宽卡片，4:3 图片框完整显示原图，保留原始比例；底部为“图鉴 / 卡片册 / 设置”。图鉴和卡片册右下角的圆形星光图标打开应用内推荐浮层，收起后保留本次输入与结果，不需要系统悬浮窗权限。编辑页顶部固定主色“AI 填充”按钮，显示目标服务，支持取消与撤销，仅填充空字段。模型配置仍在设置中管理。最新验证与截图见 [手动裁切与 AI 入口验收](docs/superpowers/specs/manual-crop-ui.md)。
+手机竖屏采用单列等宽、随当前图片原比例自适应高度的卡片，图片四周保留 12dp 内边距。点击图片翻到教学背面；详情和添加使用照片右上角无底色的覆盖图标，点击背面返回正面。长卡片随列表滚动，多图分页仍可用。底部为“图鉴 / 卡片册 / 设置”。图鉴和卡片册右下角的圆形星光图标打开应用内推荐浮层，收起后保留本次输入与结果，不需要系统悬浮窗权限。新增页的“AI 填充”位于“添加照片”下方并随表单滚动；编辑已有卡片时仍在顶部固定显示，显示目标服务，支持取消与撤销，仅填充空字段。模型配置仍在设置中管理。卡片交互与验证见 [原图比例卡片规格](docs/superpowers/specs/2026-10-25-adaptive-card-interaction.md)，历史裁切验收见 [手动裁切与 AI 入口验收](docs/superpowers/specs/manual-crop-ui.md)。
 
 单模块分为 `ui`（Compose / ViewModel）、`domain`（规则和模型）、`data`（Room、图片、备份、打印、AI）。图片存于应用私有目录，Room 保存稳定引用；备份是跨设备迁移方式。
 

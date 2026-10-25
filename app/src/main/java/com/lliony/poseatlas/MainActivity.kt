@@ -4,6 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.luminance
+import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lliony.poseatlas.ui.AtlasApp
@@ -25,7 +29,17 @@ import dagger.hilt.android.AndroidEntryPoint
                 }
             }
             val prefs = vm.preferences.collectAsStateWithLifecycle().value
-            AtlasTheme(prefs.theme) { AtlasApp(vm) }
+            AtlasTheme(prefs.theme) {
+                val lightBars = MaterialTheme.colorScheme.background.luminance() > 0.5f
+                // 应用内配色可独立于系统主题，系统栏图标也要同步。
+                SideEffect {
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = lightBars
+                        isAppearanceLightNavigationBars = lightBars
+                    }
+                }
+                AtlasApp(vm)
+            }
         }
     }
 }

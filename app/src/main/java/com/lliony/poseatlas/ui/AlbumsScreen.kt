@@ -4,10 +4,15 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lliony.poseatlas.domain.model.Album
@@ -19,13 +24,23 @@ import java.util.UUID
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<Album?>(null) }
+    val activeCardIds = remember(state.cards) { state.cards.filterNot { it.deleted }.map { it.id }.toSet() }
     Column {
-        PageTitle("卡片册") { TextButton(onClick = { edit = Album(UUID.randomUUID().toString(), ""); name = ""; description = "" }) { Text("新建") } }
-        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(state.albums, key = { it.id }) { album -> OutlinedCard(onClick = { open(album.id) }, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
-                Text(album.name, style = MaterialTheme.typography.titleLarge)
-                Text("${album.cardIds.count { id -> state.cards.any { it.id == id && !it.deleted } }} 张卡片 · ${album.description}")
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
+        PageTitle("卡片册") { FilledTonalButton(onClick = { edit = Album(UUID.randomUUID().toString(), ""); name = ""; description = "" }) { Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("新建") } }
+        LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(state.albums, key = { it.id }) { album -> Card(onClick = { open(album.id) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) { Column(Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Surface(Modifier.size(52.dp), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
+                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.CollectionsBookmark, null, tint = MaterialTheme.colorScheme.primary) }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(album.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("${album.cardIds.count { it in activeCardIds }} 张卡片", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        if (album.description.isNotBlank()) Text(album.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { edit = album; name = album.name; description = album.description }) { Text("编辑") }
                     val index = state.albums.indexOf(album)
                     TextButton(onClick = { vm.action { val albums = state.albums.toMutableList(); java.util.Collections.swap(albums, index, index - 1); vm.repository.mutate { saveAlbums(albums) } } }, enabled = index > 0) { Text("上移") }
@@ -33,7 +48,14 @@ import java.util.UUID
                     TextButton(onClick = { deleting = album }) { Text("删除") }
                 }
             } } }
-            if (state.albums.isEmpty()) item { Text("创建一本卡片册，整理下一次拍摄的姿势。") }
+            if (state.albums.isEmpty()) item {
+                Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Default.CollectionsBookmark, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text("创建一本卡片册，整理下一次拍摄的姿势。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
     }
     if (edit != null) AlertDialog(onDismissRequest = { edit = null }, title = { Text("卡片册") }, text = { Column { OutlinedTextField(name, { name = it }, label = { Text("名称") }); OutlinedTextField(description, { description = it }, label = { Text("描述") }) } }, confirmButton = { TextButton(onClick = { vm.action {
@@ -52,11 +74,12 @@ import java.util.UUID
     fun save(ids: List<String>) { vm.action { vm.repository.mutate { saveAlbums(vm.state.value.albums.map { if (it.id == id) it.copy(cardIds = ids.distinct()) else it }) } } }
     Column {
         PageTitle(album.name, back) { TextButton(onClick = { chosen = album.cardIds.toSet(); adding = true }) { Text("加卡") }; TextButton(onClick = { print(album.cardIds) }, enabled = album.cardIds.isNotEmpty()) { Text("打印 / PDF") } }
-        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(album.cardIds, key = { it }) { cardId ->
                 val card = state.cards.find { it.id == cardId && !it.deleted }
-                if (card != null) OutlinedCard(onClick = { detail(cardId) }, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
-                    Text("${card.code} · ${card.title}", style = MaterialTheme.typography.titleMedium)
+                if (card != null) Card(onClick = { detail(cardId) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) { Column(Modifier.padding(16.dp)) {
+                    Text(card.code, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(card.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
                     Row {
                         val index = album.cardIds.indexOf(cardId)
                         TextButton(onClick = { val ids = album.cardIds.toMutableList(); java.util.Collections.swap(ids, index, index - 1); save(ids) }, enabled = index > 0) { Text("上移") }

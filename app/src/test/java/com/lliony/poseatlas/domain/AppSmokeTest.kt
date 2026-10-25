@@ -16,9 +16,35 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AppSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @Test fun systemBarIconsFollowTheInAppTheme() {
+        compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val controller = androidx.core.view.WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView)
+        compose.runOnIdle { vm.preferences(vm.preferences.value.copy(theme = "dark")) }
+        compose.waitUntil(10_000) { compose.runOnIdle { vm.preferences.value.theme == "dark" } }
+        compose.waitForIdle()
+        org.junit.Assert.assertFalse(controller.isAppearanceLightStatusBars)
+        org.junit.Assert.assertFalse(controller.isAppearanceLightNavigationBars)
+        compose.runOnIdle { vm.preferences(vm.preferences.value.copy(theme = "paper")) }
+        compose.waitUntil(10_000) { compose.runOnIdle { vm.preferences.value.theme == "paper" } }
+        compose.waitForIdle()
+        org.junit.Assert.assertTrue(controller.isAppearanceLightStatusBars)
+        org.junit.Assert.assertTrue(controller.isAppearanceLightNavigationBars)
+    }
+    @Test fun newCardPlacesAiFillBelowAddPhotos() {
+        compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("新建卡片").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("ai-fill-bar").fetchSemanticsNodes().isNotEmpty() }
+        val addPhoto = compose.onNodeWithText("＋ 添加照片 (0/20)").getUnclippedBoundsInRoot()
+        val ai = compose.onNodeWithTag("ai-fill-bar").getUnclippedBoundsInRoot()
+        org.junit.Assert.assertTrue(ai.top >= addPhoto.bottom)
+        compose.onNodeWithText("私人备注（不打印、不分享）").performScrollTo()
+        compose.onNodeWithText("AI 填充").assertIsNotDisplayed()
+        compose.onNodeWithText("AI 填充").performScrollTo().assertIsDisplayed()
+    }
     @Test fun aiFillActionsStayVisibleWhileScrollingAndUndoRestoresSnapshot() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("往前走，拍一个背影").performClick()
+        compose.onNodeWithText("往前走，拍一个背影").performScrollTo().performClick()
         compose.onNodeWithText("编辑").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("AI 填充").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("私人备注（不打印、不分享）").performScrollTo()
@@ -33,7 +59,7 @@ class AppSmokeTest {
     }
     @Test fun failedCropKeepsOriginalAndCanRetry() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("往前走，拍一个背影").performClick()
+        compose.onNodeWithText("往前走，拍一个背影").performScrollTo().performClick()
         compose.onNodeWithText("编辑").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("AI 填充").fetchSemanticsNodes().isNotEmpty() }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
@@ -56,23 +82,86 @@ class AppSmokeTest {
         org.junit.Assert.assertNotEquals(photo.src, vm.editor.value!!.card.images.first().src)
         org.junit.Assert.assertArrayEquals(originalBytes, file.readBytes())
     }
-    @Test fun cardFrontHeightDoesNotDependOnCodeWrapping() {
-        compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
+    private fun showRatioPhoto(width: Int, height: Int): String {
+        compose.waitUntil(20_000) {
+            compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty()
+        }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
-        val first = vm.state.value.cards[0]
-        val second = vm.state.value.cards[1]
-        kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(first.copy(code = "01\n02\n03\n04\n05")) } }
-        val firstHeight = compose.onNodeWithTag("pose-card-${first.id}").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
-        compose.onNodeWithTag("library-grid").performScrollToNode(hasTestTag("pose-card-${second.id}"))
-        val secondHeight = compose.onNodeWithTag("pose-card-${second.id}").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
-        org.junit.Assert.assertEquals(firstHeight, secondHeight, 1f)
+        val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val bytes = java.io.ByteArrayOutputStream().apply {
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, this)
+        }.toByteArray()
+        bitmap.recycle()
+        val photo = vm.repository.images.import(bytes.inputStream())
+        val card = vm.state.value.cards.first()
+        kotlinx.coroutines.runBlocking {
+            vm.repository.mutate { saveCard(card.copy(images = listOf(photo))) }
+        }
+        compose.waitUntil(10_000) {
+            compose.runOnIdle { vm.state.value.cards.first { it.id == card.id }.images.single().id == photo.id }
+        }
+        compose.waitForIdle()
+        return card.id
+    }
+
+    @Test fun cardPhotoUsesItsOwnAspectAndHasRealInsets() {
+        listOf(90 to 160, 100 to 100, 120 to 160, 160 to 90, 100 to 150, 160 to 120).forEach { (w, h) ->
+            val id = showRatioPhoto(w, h)
+            compose.onNodeWithTag("library-grid").performScrollToIndex(0)
+            val photo = compose.onNodeWithTag("card-photo-$id", useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val card = compose.onNodeWithTag("pose-card-$id").getUnclippedBoundsInRoot()
+            org.junit.Assert.assertEquals(w.toFloat() / h, (photo.right - photo.left).value / (photo.bottom - photo.top).value, 0.02f)
+            org.junit.Assert.assertTrue(photo.left.value - card.left.value >= 11.5f)
+            org.junit.Assert.assertTrue(card.right.value - photo.right.value >= 11.5f)
+            org.junit.Assert.assertTrue(photo.top.value - card.top.value >= 11.5f)
+        }
+    }
+    @Test fun longCodeDoesNotChangeTheSamePhotoCardHeight() {
+        val id = showRatioPhoto(120, 160)
+        val before = compose.onNodeWithTag("pose-card-$id").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val card = vm.state.value.cards.first { it.id == id }
+        kotlinx.coroutines.runBlocking {
+            vm.repository.mutate { saveCard(card.copy(code = "01\n02\n03\n04\n05")) }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("01\n02\n03\n04\n05").fetchSemanticsNodes().isNotEmpty()
+        }
+        val after = compose.onNodeWithTag("pose-card-$id").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
+        org.junit.Assert.assertEquals(before, after, 1f)
+    }
+    @Test fun photoFlipsWhileTopIconsKeepTheirOwnActions() {
+        val id = showRatioPhoto(120, 160)
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val title = vm.state.value.cards.first { it.id == id }.title
+        val photoBounds = compose.onNodeWithTag("card-photo-$id", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val controls = compose.onNodeWithTag("card-controls-$id", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        org.junit.Assert.assertTrue(controls.top >= photoBounds.top && controls.bottom <= photoBounds.bottom)
+        org.junit.Assert.assertTrue(controls.left >= photoBounds.left && controls.right <= photoBounds.right)
+        compose.onNodeWithTag("card-photo-$id", useUnmergedTree = true).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("card-back-$id", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("card-back-$id", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("编辑", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("card-back-$id", useUnmergedTree = true).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("card-photo-$id", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("card-photo-$id", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("选择卡片：$title").performClick().assertIsOn()
+        compose.onNodeWithText("已选 1").assertExists()
+        compose.onNodeWithTag("card-back-$id", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("选择卡片：$title").performClick().assertIsOff()
+        compose.onNodeWithContentDescription("查看详情：$title").performClick()
+        compose.onNodeWithText("编辑").assertExists()
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("card-photo-$id", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("card-photo-$id", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("翻面看教学").assertDoesNotExist()
     }
     @Test fun circularRecommendationAndManualCropKeepOriginalUntilConfirmed() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
         val fab = compose.onNodeWithContentDescription("打开模型推荐").fetchSemanticsNode().boundsInRoot
         org.junit.Assert.assertEquals(fab.width, fab.height, 1f)
         compose.onNodeWithText("模型推荐").assertDoesNotExist()
-        compose.onNodeWithText("往前走，拍一个背影").performClick()
+        compose.onNodeWithText("往前走，拍一个背影").performScrollTo().performClick()
         compose.onNodeWithText("编辑").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("AI 填充").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("AI 填充").assertIsDisplayed()
@@ -81,6 +170,7 @@ class AppSmokeTest {
         compose.onNodeWithText("裁切当前图片").performScrollTo().performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("确认裁切").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("取消裁切").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("crop-screen").fetchSemanticsNodes().isEmpty() }
         org.junit.Assert.assertEquals(original, vm.editor.value!!.card.images.first())
         compose.onNodeWithText("AI 填充").assertIsDisplayed()
         compose.onNodeWithText("裁切当前图片").performScrollTo().performClick()
