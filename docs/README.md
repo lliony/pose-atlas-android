@@ -16,4 +16,4 @@ related_plan: superpowers/plans/2026-10-25-adaptive-card-interaction.md
 | 了解裁切、保存和上一版卡片规则 | [手动裁切与 AI 入口](superpowers/specs/manual-crop-ui.md) |
 | 查看原始实施拆分 | [初始实施计划](superpowers/plans/2026-10-22-pose-atlas-implementation.md) |
 | 查看既有验收与进度 | [验收记录](superpowers/plans/acceptance.md) · [进度](superpowers/plans/progress.md) |
-| 查看 Beta 发布范围 | [Beta 发布说明](releases/v1.0.0-beta.1.md) |
+| 查看 Beta 发布范围 | [Beta 发布说明](releases/v1.0.0-beta.2.md) |
