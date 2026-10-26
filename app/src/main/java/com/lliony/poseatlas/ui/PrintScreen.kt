@@ -54,7 +54,7 @@ import java.io.FileOutputStream
             ToggleRow("裁切虚线", options.frame, enabled = !busy && optionsLoaded) { options = options.copy(frame = it); file = null; preview = null }
             ToggleRow("生成双面校验页", options.calibration, enabled = !busy && optionsLoaded) { options = options.copy(calibration = it); file = null; preview = null }
             Text("每张图片印一张卡。App 配对正反面，打印机需选择对应双面翻转；也可手动送纸。私人备注不输出。", style = MaterialTheme.typography.bodySmall)
-            Button(onClick = { val requested = options; vm.action { val cards = ids.mapNotNull { id -> state.cards.find { it.id == id && !it.deleted } }; val generated = withContext(Dispatchers.IO) { vm.pdf.render(cards, state.categories, requested) }; if (options == requested) { file = generated; page = 0 } } }, enabled = !busy && optionsLoaded) { Text("生成并检查版面") }
+            Button(onClick = { val requested = options; vm.action { val cards = ids.mapNotNull { id -> state.cards.find { it.id == id && !it.deleted } }; val generated = vm.renderPdf(cards, requested); if (options == requested) { file = generated; page = 0 } } }, enabled = !busy && optionsLoaded) { Text("生成并检查版面") }
             if (file != null) {
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = { save.launch("pose-atlas.pdf") }) { Text("另存 PDF") }

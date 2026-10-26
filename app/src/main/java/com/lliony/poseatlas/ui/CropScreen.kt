@@ -51,7 +51,7 @@ data class CropSession(val cardId: String, val photo: Photo)
     var loading by remember { mutableStateOf(true) }
     val bitmap by produceState<Bitmap?>(null, target.photo.src, target.photo.panel, attempt) {
         loading = true
-        value = withContext(Dispatchers.IO) { vm.repository.images.decode(target.photo, 1024) }
+        value = withContext(Dispatchers.IO) { vm.images.decode(target.photo, 1024) }
         loading = false
     }
     val imageAspect = bitmap?.let { it.width.toFloat() / it.height } ?: 1f

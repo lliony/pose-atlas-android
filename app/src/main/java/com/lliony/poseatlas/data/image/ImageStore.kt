@@ -5,6 +5,7 @@ import android.graphics.*
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import com.lliony.poseatlas.domain.model.Photo
+import com.lliony.poseatlas.domain.model.MediaRef
 import com.lliony.poseatlas.domain.logic.NormalizedCrop
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -16,8 +17,8 @@ import kotlin.math.roundToInt
 
 @Singleton class ImageStore @Inject constructor(@ApplicationContext private val context: Context) {
     private val directory = File(context.filesDir, "images").apply { mkdirs() }
-    fun file(src: String): File? = Regex("^/api/media/([a-zA-Z0-9_-]+)$").matchEntire(src)?.let { File(directory, "${it.groupValues[1]}.jpg") }
-    fun open(src: String): InputStream = if (src.matches(Regex("^/images/(street|cafe|park|sea|indoor|stairs|pose-reference-styles)\\.png$"))) context.assets.open("seed$src") else file(src)?.inputStream() ?: error("图片不存在")
+    fun file(src: String): File? = MediaRef.mediaFileName(src)?.let { File(directory, "$it.jpg") }
+    fun open(src: String): InputStream = if (MediaRef.isSeed(src)) context.assets.open("seed$src") else file(src)?.inputStream() ?: error("图片不存在")
     fun import(uri: Uri): Photo = context.contentResolver.openInputStream(uri)?.use { import(it) } ?: error("无法读取图片")
     fun import(input: InputStream): Photo {
         val temp = File.createTempFile("image-", ".input", context.cacheDir)
@@ -91,7 +92,7 @@ import kotlin.math.roundToInt
         val w = (bitmap.width * scale).roundToInt().coerceAtLeast(1)
         val h = (bitmap.height * scale).roundToInt().coerceAtLeast(1)
         val output = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val src = "/api/media/${UUID.randomUUID()}"
+        val src = MediaRef.newId()
         val destination = file(src)!!
         val temporary = File(directory, "${destination.name}.tmp")
         try {

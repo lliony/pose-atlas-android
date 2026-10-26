@@ -33,7 +33,7 @@ import java.util.UUID
     var merge by remember { mutableStateOf(true) }
     var pendingImport by remember { mutableStateOf<Uri?>(null) }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri -> if (uri != null) vm.action {
-        val missing = vm.backup.export(uri, includeImages); vm.message("备份已保存${if (missing > 0) "，缺失 $missing 张图片" else ""}")
+        val missing = vm.exportBackup(uri, includeImages); vm.message("备份已保存${if (missing > 0) "，缺失 $missing 张图片" else ""}")
     } }
     val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { pendingImport = it }
     Column {
@@ -70,7 +70,7 @@ import java.util.UUID
         }
     }
     if (pendingImport != null) AlertDialog(onDismissRequest = { pendingImport = null }, title = { Text(if (merge) "合并导入资料？" else "替换全部资料？") }, text = { Text(if (merge) "相同 ID 的条目将由备份覆盖，其余保留。" else "当前资料将被替换。仅文字备份会清空本地旧图，建议先导出当前备份。") }, confirmButton = { TextButton(onClick = {
-        val uri = pendingImport!!; pendingImport = null; vm.action { vm.message(vm.backup.import(uri, merge)) }
+        val uri = pendingImport!!; pendingImport = null; vm.action { vm.message(vm.importBackup(uri, merge)) }
     }) { Text("导入") } }, dismissButton = { TextButton(onClick = { pendingImport = null }) { Text("取消") } })
 }
 
@@ -111,18 +111,16 @@ import java.util.UUID
                 Text("${category.code} · ${category.name}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = { editing = category; name = category.name; code = category.code }) { Text("编辑") }
-                    TextButton(onClick = { vm.action { val items = state.categories.toMutableList(); java.util.Collections.swap(items, index, index - 1); vm.repository.mutate { saveCategories(items) } } }, enabled = index > 0) { Text("上移") }
-                    TextButton(onClick = { vm.action { val items = state.categories.toMutableList(); java.util.Collections.swap(items, index, index + 1); vm.repository.mutate { saveCategories(items) } } }, enabled = index < state.categories.lastIndex) { Text("下移") }
+                    TextButton(onClick = { vm.reorderCategories(category.id, true) }, enabled = index > 0) { Text("上移") }
+                    TextButton(onClick = { vm.reorderCategories(category.id, false) }, enabled = index < state.categories.lastIndex) { Text("下移") }
                     TextButton(onClick = { deleting = category; target = state.categories.first { it.id != category.id }.id }, enabled = state.categories.size > 1) { Text("删除") }
                 }
             } } }
         }
     }
-    if (editing != null) AlertDialog(onDismissRequest = { editing = null }, title = { Text("分类") }, text = { Column { OutlinedTextField(name, { name = it }, label = { Text("名称") }); OutlinedTextField(code, { code = it }, label = { Text("代码") }) } }, confirmButton = { TextButton(onClick = {
-        val category = editing!!.copy(name = name.trim(), code = code.trim()); vm.action { val items = state.categories.toMutableList(); val index = items.indexOfFirst { it.id == category.id }; if (index < 0) items.add(category) else items[index] = category; vm.repository.mutate { saveCategories(items) }; editing = null }
-    }) { Text("保存") } }, dismissButton = { TextButton(onClick = { editing = null }) { Text("取消") } })
+    if (editing != null) AlertDialog(onDismissRequest = { editing = null }, title = { Text("分类") }, text = { Column { OutlinedTextField(name, { name = it }, label = { Text("名称") }); OutlinedTextField(code, { code = it }, label = { Text("代码") }) } }, confirmButton = { TextButton(onClick = { vm.saveCategory(editing!!.copy(name = name.trim(), code = code.trim())); editing = null }) { Text("保存") } }, dismissButton = { TextButton(onClick = { editing = null }) { Text("取消") } })
     if (deleting != null) AlertDialog(onDismissRequest = { deleting = null }, title = { Text("删除分类并迁移卡片") }, text = { Column {
         Text("卡片不会删除，编号不变。请选择接收分类：")
         state.categories.filter { it.id != deleting!!.id }.forEach { category -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(target == category.id, { target = category.id }); Text(category.name) } }
-    } }, confirmButton = { TextButton(onClick = { val source = deleting!!.id; vm.action { vm.repository.mutate { deleteCategory(source, target) }; deleting = null } }) { Text("迁移并删除") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } })
+    } }, confirmButton = { TextButton(onClick = { val source = deleting!!.id; vm.deleteCategory(source, target); deleting = null }) { Text("迁移并删除") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } })
 }

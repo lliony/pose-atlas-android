@@ -32,8 +32,6 @@ import com.lliony.poseatlas.domain.logic.*
 import com.lliony.poseatlas.domain.model.Photo
 import com.lliony.poseatlas.ui.components.PhotoView
 import com.lliony.poseatlas.ui.theme.AtlasAccentBrush
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.net.URI
 import java.util.UUID
 
@@ -57,14 +55,14 @@ import java.util.UUID
                 Text("${profile.format.label} · ${URI(profile.baseUrl).host} · ${profile.model}", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = { editing = profile }) { Text("编辑") }
-                    TextButton(onClick = { vm.action("连接测试成功") { vm.ai.request(profile, "请只回复 OK。", "连接测试") } }, enabled = !busy) { Text("测试连接") }
-                    TextButton(onClick = { vm.action { vm.aiConfig.set(config.copy(recommendId = profile.id)) } }) { Text(if (config.recommendId == profile.id) "✓ 推荐模型" else "用于推荐") }
-                    TextButton(onClick = { vm.action { vm.aiConfig.set(config.copy(draftId = profile.id)) } }) { Text(if (config.draftId == profile.id) "✓ 填卡模型" else "用于填卡") }
-                    TextButton(onClick = { vm.action { vm.aiConfig.set(config.copy(profiles = config.profiles.filterNot { it.id == profile.id }, recommendId = config.recommendId.takeUnless { it == profile.id }, draftId = config.draftId.takeUnless { it == profile.id })) } }) { Text("删除") }
+                    TextButton(onClick = { vm.action("连接测试成功") { vm.testAi(profile) } }, enabled = !busy) { Text("测试连接") }
+                    TextButton(onClick = { vm.useForRecommend(profile.id) }) { Text(if (config.recommendId == profile.id) "✓ 推荐模型" else "用于推荐") }
+                    TextButton(onClick = { vm.useForDraft(profile.id) }) { Text(if (config.draftId == profile.id) "✓ 填卡模型" else "用于填卡") }
+                    TextButton(onClick = { vm.deleteAiProfile(profile.id) }) { Text("删除") }
                 }
             } } }
             Button(onClick = recommend, enabled = !busy) { Text("开始 AI 推荐") }
-            TextButton(onClick = { vm.action("AI 配置已清除") { vm.aiConfig.set(AiConfiguration()) } }) { Text("清除全部 AI 配置") }
+            TextButton(onClick = { vm.clearAiConfig() }) { Text("清除全部 AI 配置") }
             if (busy) TextButton(onClick = vm::cancelOperation) { Text("取消请求") }
         }
     }
@@ -76,11 +74,7 @@ import java.util.UUID
         OutlinedTextField(profile.model, { editing = profile.copy(model = it) }, label = { Text("模型 ID") })
         OutlinedTextField(profile.apiKey, { editing = profile.copy(apiKey = it) }, label = { Text("API key") }, visualTransformation = PasswordVisualTransformation())
         ToggleRow("记住本机", profile.remember) { editing = profile.copy(remember = it) }
-    } }, confirmButton = { TextButton(onClick = { vm.action {
-        require(profile.name.isNotBlank() && profile.model.isNotBlank() && profile.apiKey.isNotBlank()) { "请填写名称、模型和 API key" }
-        val normalized = profile.copy(baseUrl = normalizeAiUrl(profile.baseUrl))
-        vm.aiConfig.set(config.copy(profiles = config.profiles.filterNot { it.id == profile.id } + normalized, recommendId = config.recommendId ?: profile.id, draftId = config.draftId ?: profile.id)); editing = null
-    } }) { Text("保存") } }, dismissButton = { TextButton(onClick = { editing = null }) { Text("取消") } }) }
+    } }, confirmButton = { TextButton(onClick = { vm.upsertAiProfile(profile); editing = null }) { Text("保存") } }, dismissButton = { TextButton(onClick = { editing = null }) { Text("取消") } }) }
 }
 
 class RecommendationSession {
@@ -107,7 +101,7 @@ class RecommendationSession {
     var resultScope by session.resultScope
     var addToAlbum by remember { mutableStateOf(false) }
     val profile = config.profiles.find { it.id == config.recommendId }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) vm.action { photo = withContext(Dispatchers.IO) { vm.repository.images.import(uri) } } }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) vm.action { photo = vm.importPhoto(uri) } }
     val candidates = state.cards.filter { !it.deleted && when (scope) { "指定分类" -> it.categoryId == scopeId; "指定卡片册" -> it.id in state.albums.find { a -> a.id == scopeId }?.cardIds.orEmpty(); else -> true } }
     Column {
         Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -147,7 +141,7 @@ class RecommendationSession {
                 ),
             )
             photo?.let {
-                PhotoView(it, vm.repository.images, "AI 参考图片", Modifier.height(180.dp).fillMaxWidth().clip(MaterialTheme.shapes.medium))
+                PhotoView(it, vm.images, "AI 参考图片", Modifier.height(180.dp).fillMaxWidth().clip(MaterialTheme.shapes.medium))
                 TextButton(onClick = { photo = null }) { Text("移除参考图") }
             }
             OutlinedButton(
@@ -165,7 +159,7 @@ class RecommendationSession {
             Text("候选 ${candidates.size} 张卡片。${if (profile == null) "请先配置推荐模型。" else "图片和描述会发送给 ${URI(profile.baseUrl).host}"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = { if (profile == null) settings() else vm.action {
                 result = null; resultScope = candidates.map { it.id }.toSet()
-                result = vm.ai.recommend(profile, candidates, state.categories, description, mode, photo)
+                result = vm.requestRecommendation(profile, candidates, description, mode, photo)
             } }, enabled = !busy && candidates.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).background(AtlasAccentBrush, MaterialTheme.shapes.medium),
                 shape = MaterialTheme.shapes.medium,
@@ -193,7 +187,7 @@ class RecommendationSession {
                     ) {
                         Box {
                             card.images.firstOrNull()?.let { image ->
-                                PhotoView(image, vm.repository.images, card.title,
+                                PhotoView(image, vm.images, card.title,
                                     Modifier.fillMaxWidth().aspectRatio(photoAspect(image).toFloat()),
                                     contentScale = ContentScale.Crop)
                             }
@@ -212,8 +206,8 @@ class RecommendationSession {
             }
         }
     }
-    if (addToAlbum) AlertDialog(onDismissRequest = { addToAlbum = false }, title = { Text("选择卡片册") }, text = { Column { if (state.albums.isEmpty()) Text("请先在卡片册页面新建。") else state.albums.forEach { album -> TextButton(onClick = { vm.action("已加入卡片册") {
-        val ids = result?.recommendations.orEmpty().map { it.cardId }.filter { id -> vm.state.value.cards.any { it.id == id && !it.deleted } }
-        vm.repository.mutate { saveAlbums(vm.state.value.albums.map { if (it.id == album.id) it.copy(cardIds = (it.cardIds + ids).distinct()) else it }) }; addToAlbum = false
-    } }) { Text(album.name) } } } }, confirmButton = { TextButton(onClick = { addToAlbum = false }) { Text("关闭") } })
+    if (addToAlbum) AlertDialog(onDismissRequest = { addToAlbum = false }, title = { Text("选择卡片册") }, text = { Column { if (state.albums.isEmpty()) Text("请先在卡片册页面新建。") else state.albums.forEach { album -> TextButton(onClick = {
+        val ids = result?.recommendations.orEmpty().map { it.cardId }.filter { id -> state.cards.any { it.id == id && !it.deleted } }
+        vm.addCardsToAlbum(album.id, ids); addToAlbum = false
+    }) { Text(album.name) } } } }, confirmButton = { TextButton(onClick = { addToAlbum = false }) { Text("关闭") } })
 }

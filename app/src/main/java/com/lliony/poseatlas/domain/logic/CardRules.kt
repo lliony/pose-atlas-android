@@ -3,6 +3,9 @@ package com.lliony.poseatlas.domain.logic
 import com.lliony.poseatlas.domain.model.*
 import kotlin.math.abs
 
+/** 每张卡片的图片数量上限；valid 门禁与界面（导入/按钮）共用这一处持主。 */
+const val MAX_IMAGES_PER_CARD = 20
+
 fun resolveNotes(card: Card, photo: Photo): Notes = Notes.from(photo.notes.values().zip(card.notes.values()) { image, general -> image.trim().ifEmpty { general } })
 
 fun nextCardCode(category: Category, cards: List<Card>): String {
@@ -26,10 +29,10 @@ fun validateState(state: State) {
         require(c.tags.size <= 12) { "标签不能超过 12 个" }; c.tags.forEach { text(it, 40) }
         require(c.gender == null || c.gender == "" || c.gender in genders) { "性别分类无效" }
         require(c.styles == null || (c.styles.all { it in styles } && c.styles.distinct() == c.styles)) { "气质风格无效" }
-        require(c.images.size in 1..20) { "每张卡片需 1 至 20 张图片" }
+        require(c.images.size in 1..MAX_IMAGES_PER_CARD) { "每张卡片需 1 至 $MAX_IMAGES_PER_CARD 张图片" }
         c.images.forEach { p ->
             id(p.id); notes(p.notes)
-            require(p.src.matches(Regex("^/(images/(street|cafe|park|sea|indoor|stairs|pose-reference-styles)\\.png|api/media/[a-zA-Z0-9_-]+)$"))) { "图片地址不正确" }
+            require(MediaRef.isValid(p.src)) { "图片地址不正确" }
             require(p.panel == null || p.panel in 0..(if (p.src == "/images/pose-reference-styles.png") 5 else 2)) { "图片分栏无效" }
             require(listOfNotNull(p.width, p.height).all { it in 1..30000 }) { "图片尺寸无效" }
         }
@@ -45,7 +48,7 @@ fun photoAspect(photo: Photo): Double = when {
     photo.width != null && photo.height != null -> photo.width.toDouble() / photo.height
     photo.panel != null -> if (photo.src.endsWith("pose-reference-styles.png")) 0.75 else 1.0
     photo.src.endsWith("pose-reference-styles.png") -> 2304.0 / 2048
-    photo.src.startsWith("/images/") -> 3.0
+    MediaRef.isSeed(photo.src) -> 3.0
     else -> 0.75
 }
 

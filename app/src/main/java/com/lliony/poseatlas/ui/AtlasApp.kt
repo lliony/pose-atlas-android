@@ -50,8 +50,6 @@ import com.lliony.poseatlas.domain.model.Card as PoseCard
 import com.lliony.poseatlas.ui.components.PhotoView
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Serializable object LibraryRoute
 @Serializable object SettingsRoute
@@ -112,7 +110,7 @@ import kotlinx.coroutines.withContext
             Column(Modifier.weight(1f)) {
                 if (busy) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
-                    val progress by vm.backup.progress.collectAsStateWithLifecycle()
+                    val progress by vm.backupProgress.collectAsStateWithLifecycle()
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) { Text(progress ?: "正在处理", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); TextButton(onClick = vm::cancelOperation) { Text("取消") } }
                 }
                 if (loading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -218,7 +216,7 @@ import kotlinx.coroutines.withContext
         if (selected.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("已选 ${selected.size}")
             if (!trash) { TextButton(onClick = { print(selected.toList()) }) { Text("打印") }; TextButton(onClick = { addingToAlbum = true }) { Text("加入册子") } }
-            if (trash) TextButton(onClick = { val ids = selected; vm.action("已恢复") { vm.repository.mutate { setDeleted(ids, false) } }; selected = emptySet() }) { Text("恢复") }
+            if (trash) TextButton(onClick = { val ids = selected; vm.restoreCards(ids); selected = emptySet() }) { Text("恢复") }
             TextButton(onClick = { confirmDelete = true }) { Text(if (trash) "永久删除" else "移入回收站") }
             TextButton(onClick = { selected = emptySet() }) { Text("取消") }
         }
@@ -242,7 +240,7 @@ import kotlinx.coroutines.withContext
                     Column {
                         if (rotation <= 90f) {
                             Box {
-                                PhotoView(photo, vm.repository.images, card.title, Modifier.testTag("card-photo-${card.id}").fillMaxWidth().aspectRatio(photoAspect(photo).toFloat()).combinedClickable(onClickLabel = "翻面看教学", onClick = { flipped = true }, onLongClickLabel = "选择卡片", onLongClick = { selected = selected + card.id }).background(MaterialTheme.colorScheme.surfaceVariant))
+                                PhotoView(photo, vm.images, card.title, Modifier.testTag("card-photo-${card.id}").fillMaxWidth().aspectRatio(photoAspect(photo).toFloat()).combinedClickable(onClickLabel = "翻面看教学", onClick = { flipped = true }, onLongClickLabel = "选择卡片", onLongClick = { selected = selected + card.id }).background(MaterialTheme.colorScheme.surfaceVariant))
                                 Row(
                                     Modifier.align(Alignment.TopEnd).padding(8.dp).testTag("card-controls-${card.id}"),
                                 ) {
@@ -293,7 +291,7 @@ import kotlinx.coroutines.withContext
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(if (trash) "永久删除所选卡片？" else "移入回收站？") }, text = { Text(if (trash) "此操作无法撤销。" else "可以在设置中的回收站恢复。") }, confirmButton = { TextButton(onClick = {
         val ids = selected
-        if (trash) vm.action("已永久删除") { vm.repository.mutate(cleanup = true) { deletePermanently(ids) } } else vm.trash(ids)
+        if (trash) vm.deletePermanently(ids) else vm.trash(ids)
         selected = emptySet(); confirmDelete = false
     }) { Text("确认") } }, dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } })
     if (addingToAlbum) AlertDialog(onDismissRequest = { addingToAlbum = false }, title = { Text("加入卡片册") }, text = { Column {
@@ -301,12 +299,8 @@ import kotlinx.coroutines.withContext
         state.albums.forEach { album ->
             TextButton(onClick = {
                 val ids = selected
-                vm.action("已加入卡片册") {
-                    vm.repository.mutate {
-                        saveAlbums(vm.state.value.albums.map { if (it.id == album.id) it.copy(cardIds = (it.cardIds + ids).distinct()) else it })
-                    }
-                    addingToAlbum = false
-                }
+                vm.addCardsToAlbum(album.id, ids.toList())
+                addingToAlbum = false
             }) { Text(album.name) }
         }
     } }, confirmButton = { TextButton(onClick = { addingToAlbum = false }) { Text("关闭") } })
@@ -356,7 +350,7 @@ import kotlinx.coroutines.withContext
                                     .aspectRatio(photoAspect(photo).toFloat())
                                     .clip(RoundedCornerShape(18.dp))
                             ) { index ->
-                                PhotoView(card.images[index], vm.repository.images, "${card.title}，第 ${index + 1} 张", Modifier.fillMaxSize())
+                                PhotoView(card.images[index], vm.images, "${card.title}，第 ${index + 1} 张", Modifier.fillMaxSize())
                             }
                             if (card.images.size > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } }, enabled = pager.currentPage > 0) {
@@ -370,14 +364,14 @@ import kotlinx.coroutines.withContext
                             // 教学和分享共用停稳后的照片，避免滑动途中指向不同图片。
                             NotesView(resolveNotes(card, photo))
                             TextButton(onClick = { vm.action {
-                                val files = withContext(Dispatchers.IO) { vm.pdf.shareImages(card, photo, state.categories.find { it.id == card.categoryId }?.name.orEmpty()) }
+                                val files = vm.sharePdfImages(card, photo)
                                 shareImages(context, files)
                             } }) { Text("分享此图的卡片正反面") }
                         }
                     }
                 }
                 if (card.privateNote.isNotBlank()) item { Text("私人备注 · 仅本机", style = MaterialTheme.typography.titleSmall); Text(card.privateNote) }
-                item { TextButton(onClick = { vm.action(if (card.deleted) "已恢复卡片" else "已移入回收站") { vm.repository.mutate { setDeleted(setOf(card.id), !card.deleted) }; back() } }) { Text(if (card.deleted) "恢复卡片" else "移入回收站") } }
+                item { TextButton(onClick = { vm.toggleTrash(setOf(card.id), !card.deleted); back() }) { Text(if (card.deleted) "恢复卡片" else "移入回收站") } }
             }
         }
     }

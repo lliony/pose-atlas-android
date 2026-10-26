@@ -36,7 +36,7 @@ import java.util.UUID
                     val cover = album.cardIds.firstNotNullOfOrNull { activeCards[it]?.images?.firstOrNull() }
                     val coverModifier = Modifier.size(width = 88.dp, height = 112.dp)
                         .clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceVariant)
-                    if (cover != null) PhotoView(cover, vm.repository.images, "${album.name}封面", coverModifier, contentScale = ContentScale.Crop)
+                    if (cover != null) PhotoView(cover, vm.images, "${album.name}封面", coverModifier, contentScale = ContentScale.Crop)
                     else Box(coverModifier, contentAlignment = Alignment.Center) {
                         Text("暂无封面", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -50,8 +50,8 @@ import java.util.UUID
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { edit = album; name = album.name; description = album.description }) { Text("编辑") }
                     val index = state.albums.indexOf(album)
-                    TextButton(onClick = { vm.action { val albums = state.albums.toMutableList(); java.util.Collections.swap(albums, index, index - 1); vm.repository.mutate { saveAlbums(albums) } } }, enabled = index > 0) { Text("上移") }
-                    TextButton(onClick = { vm.action { val albums = state.albums.toMutableList(); java.util.Collections.swap(albums, index, index + 1); vm.repository.mutate { saveAlbums(albums) } } }, enabled = index < state.albums.lastIndex) { Text("下移") }
+                    TextButton(onClick = { vm.reorderAlbums(album.id, true) }, enabled = index > 0) { Text("上移") }
+                    TextButton(onClick = { vm.reorderAlbums(album.id, false) }, enabled = index < state.albums.lastIndex) { Text("下移") }
                     TextButton(onClick = { deleting = album }) { Text("删除") }
                 }
             } } }
@@ -65,12 +65,8 @@ import java.util.UUID
             }
         }
     }
-    if (edit != null) AlertDialog(onDismissRequest = { edit = null }, title = { Text("卡片册") }, text = { Column { OutlinedTextField(name, { name = it }, label = { Text("名称") }); OutlinedTextField(description, { description = it }, label = { Text("描述") }) } }, confirmButton = { TextButton(onClick = { vm.action {
-        require(name.isNotBlank()) { "请填写名称" }; val album = edit!!.copy(name = name.trim(), description = description)
-        val albums = state.albums.toMutableList(); val index = albums.indexOfFirst { it.id == album.id }; if (index < 0) albums.add(album) else albums[index] = album
-        vm.repository.mutate { saveAlbums(albums) }; edit = null
-    } }) { Text("保存") } }, dismissButton = { TextButton(onClick = { edit = null }) { Text("取消") } })
-    if (deleting != null) AlertDialog(onDismissRequest = { deleting = null }, title = { Text("删除卡片册？") }, text = { Text("册内卡片仍保留在图鉴中。") }, confirmButton = { TextButton(onClick = { val id = deleting!!.id; vm.action { vm.repository.mutate { saveAlbums(vm.state.value.albums.filterNot { it.id == id }) } }; deleting = null }) { Text("删除") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } })
+    if (edit != null) AlertDialog(onDismissRequest = { edit = null }, title = { Text("卡片册") }, text = { Column { OutlinedTextField(name, { name = it }, label = { Text("名称") }); OutlinedTextField(description, { description = it }, label = { Text("描述") }) } }, confirmButton = { TextButton(onClick = { vm.saveAlbum(edit!!.id, name, description); edit = null }) { Text("保存") } }, dismissButton = { TextButton(onClick = { edit = null }) { Text("取消") } })
+    if (deleting != null) AlertDialog(onDismissRequest = { deleting = null }, title = { Text("删除卡片册？") }, text = { Text("册内卡片仍保留在图鉴中。") }, confirmButton = { TextButton(onClick = { val id = deleting!!.id; vm.deleteAlbum(id); deleting = null }) { Text("删除") } }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } })
 }
 
 @Composable fun AlbumDetailScreen(vm: AtlasViewModel, id: String, back: () -> Unit, detail: (String) -> Unit, print: (List<String>) -> Unit) {
@@ -78,7 +74,6 @@ import java.util.UUID
     val album = state.albums.find { it.id == id } ?: return
     var adding by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf(setOf<String>()) }
-    fun save(ids: List<String>) { vm.action { vm.repository.mutate { saveAlbums(vm.state.value.albums.map { if (it.id == id) it.copy(cardIds = ids.distinct()) else it }) } } }
     Column {
         PageTitle(album.name, back) { TextButton(onClick = { chosen = album.cardIds.toSet(); adding = true }) { Text("加卡") }; TextButton(onClick = { print(album.cardIds) }, enabled = album.cardIds.isNotEmpty()) { Text("打印 / PDF") } }
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -87,7 +82,7 @@ import java.util.UUID
                 if (card != null) Card(onClick = { detail(cardId) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) { Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         card.images.firstOrNull()?.let { photo ->
-                            PhotoView(photo, vm.repository.images, "${card.title}预览",
+                            PhotoView(photo, vm.images, "${card.title}预览",
                                 Modifier.size(width = 80.dp, height = 104.dp).clip(MaterialTheme.shapes.medium)
                                     .background(MaterialTheme.colorScheme.surfaceVariant), contentScale = ContentScale.Crop)
                         }
@@ -98,13 +93,13 @@ import java.util.UUID
                     }
                     Row {
                         val index = album.cardIds.indexOf(cardId)
-                        TextButton(onClick = { val ids = album.cardIds.toMutableList(); java.util.Collections.swap(ids, index, index - 1); save(ids) }, enabled = index > 0) { Text("上移") }
-                        TextButton(onClick = { val ids = album.cardIds.toMutableList(); java.util.Collections.swap(ids, index, index + 1); save(ids) }, enabled = index < album.cardIds.lastIndex) { Text("下移") }
-                        TextButton(onClick = { save(album.cardIds - cardId) }) { Text("移出") }
+                        TextButton(onClick = { vm.moveCardInAlbum(id, cardId, true) }, enabled = index > 0) { Text("上移") }
+                        TextButton(onClick = { vm.moveCardInAlbum(id, cardId, false) }, enabled = index < album.cardIds.lastIndex) { Text("下移") }
+                        TextButton(onClick = { vm.removeCardsFromAlbum(id, listOf(cardId)) }) { Text("移出") }
                     }
                 } }
             }
         }
     }
-    if (adding) AlertDialog(onDismissRequest = { adding = false }, title = { Text("加入卡片册") }, text = { LazyColumn { items(state.cards.filterNot { it.deleted }, key = { it.id }) { card -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(card.id in chosen, { chosen = if (it) chosen + card.id else chosen - card.id }); Text(card.title) } } } }, confirmButton = { TextButton(onClick = { save(album.cardIds.filter { it in chosen } + chosen.filter { it !in album.cardIds }); adding = false }) { Text("保存") } }, dismissButton = { TextButton(onClick = { adding = false }) { Text("取消") } })
+    if (adding) AlertDialog(onDismissRequest = { adding = false }, title = { Text("加入卡片册") }, text = { LazyColumn { items(state.cards.filterNot { it.deleted }, key = { it.id }) { card -> Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(card.id in chosen, { chosen = if (it) chosen + card.id else chosen - card.id }); Text(card.title) } } } }, confirmButton = { TextButton(onClick = { vm.setAlbumCards(id, album.cardIds.filter { it in chosen } + chosen.filter { it !in album.cardIds }); adding = false }) { Text("保存") } }, dismissButton = { TextButton(onClick = { adding = false }) { Text("取消") } })
 }
