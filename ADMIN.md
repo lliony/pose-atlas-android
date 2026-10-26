@@ -2,17 +2,17 @@
 id: ADMIN-RELEASE
 title: 发布管理与扫码下载
 status: active
-last_updated: 2026-10-26
+last_updated: 2026-10-27
 ---
 # 发布管理
 
 ## 当前安装包
 
-当前版本：**1.0.0-beta.4**。
+当前版本：**1.0.0-beta.5**。
 
-[![扫码下载 Beta.4 APK](docs/images/beta-download-qr.png)](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.4/pose-atlas-1.0.0-beta.4-debug.apk)
+[![扫码下载 Beta.5 APK](docs/images/beta-download-qr.png)](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.5/pose-atlas-1.0.0-beta.5-debug.apk)
 
-[直接下载 APK](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.4/pose-atlas-1.0.0-beta.4-debug.apk) · [发布说明和升级注意事项](docs/releases/v1.0.0-beta.4.md) · [文档导航](docs/README.md)
+[直接下载 APK](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.5/pose-atlas-1.0.0-beta.5-debug.apk) · [发布说明和升级注意事项](docs/releases/v1.0.0-beta.5.md) · [文档导航](docs/README.md)
 
 ## 每次发布必须提供二维码
 

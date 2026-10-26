@@ -2,9 +2,6 @@
 package com.lliony.poseatlas.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -71,15 +68,13 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
     var leaving by remember { mutableStateOf(false) }
     val cropTarget by vm.cropSession.collectAsStateWithLifecycle()
     val editorScroll = rememberScrollState()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_IMAGES_PER_CARD)) { uris ->
-        if (uris.isNotEmpty()) vm.action {
-            val card = vm.editor.value?.card ?: return@action
-            require(card.images.size + uris.size <= MAX_IMAGES_PER_CARD) { "每张卡片最多 $MAX_IMAGES_PER_CARD 张图片" }
-            val photos = vm.importPhotos(uris)
-            val currentCard = vm.editor.value?.card?.takeIf { it.id == card.id } ?: return@action
-            require(currentCard.images.size + photos.size <= MAX_IMAGES_PER_CARD) { "每张卡片最多 $MAX_IMAGES_PER_CARD 张图片" }
-            vm.edit(currentCard.copy(images = currentCard.images + photos))
-        }
+    val addPhoto = rememberPhotoInput(vm, multiple = true) { uris ->
+        val card = vm.editor.value?.card ?: return@rememberPhotoInput
+        require(card.images.size + uris.size <= MAX_IMAGES_PER_CARD) { "每张卡片最多 $MAX_IMAGES_PER_CARD 张图片" }
+        val photos = vm.importPhotos(uris)
+        val currentCard = vm.editor.value?.card?.takeIf { it.id == card.id } ?: return@rememberPhotoInput
+        require(currentCard.images.size + photos.size <= MAX_IMAGES_PER_CARD) { "每张卡片最多 $MAX_IMAGES_PER_CARD 张图片" }
+        vm.edit(currentCard.copy(images = currentCard.images + photos))
     }
     fun close() { if (current?.dirty == true) leaving = true else vm.leaveEditor(false, back) }
     if (cropTarget != null) { CropScreen(vm, cropTarget!!); return }
@@ -112,7 +107,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
                     }
                 }
             }
-            Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy && card.images.size < MAX_IMAGES_PER_CARD) { Text("＋ 添加照片 (${card.images.size}/$MAX_IMAGES_PER_CARD)") }
+            Button(onClick = addPhoto, enabled = !busy && card.images.size < MAX_IMAGES_PER_CARD) { Text("＋ 添加照片 (${card.images.size}/$MAX_IMAGES_PER_CARD)") }
             if (current.key == "new") AiFillBar(vm, Modifier)
             val photo = card.images.getOrNull(selected)
             if (photo != null) {

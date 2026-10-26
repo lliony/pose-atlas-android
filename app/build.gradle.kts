@@ -20,8 +20,8 @@ android {
         applicationId = "com.lliony.poseatlas"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.0-beta.4"
+        versionCode = 5
+        versionName = "1.0.0-beta.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }

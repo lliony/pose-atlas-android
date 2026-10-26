@@ -1,10 +1,7 @@
 package com.lliony.poseatlas.ui
 
 import android.view.WindowManager
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.LocalActivity
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
@@ -101,7 +98,7 @@ class RecommendationSession {
     var resultScope by session.resultScope
     var addToAlbum by remember { mutableStateOf(false) }
     val profile = config.profiles.find { it.id == config.recommendId }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) vm.action { photo = vm.importPhoto(uri) } }
+    val addPhoto = rememberPhotoInput(vm) { uris -> photo = vm.importPhoto(uris.single()) }
     val candidates = state.cards.filter { !it.deleted && when (scope) { "指定分类" -> it.categoryId == scopeId; "指定卡片册" -> it.id in state.albums.find { a -> a.id == scopeId }?.cardIds.orEmpty(); else -> true } }
     Column {
         Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -145,7 +142,7 @@ class RecommendationSession {
                 TextButton(onClick = { photo = null }) { Text("移除参考图") }
             }
             OutlinedButton(
-                onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onClick = addPhoto,
                 enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 shape = MaterialTheme.shapes.medium,
                 colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),

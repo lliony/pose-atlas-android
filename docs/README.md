@@ -2,7 +2,7 @@
 id: DOC-INDEX
 title: 姿势图鉴文档导航
 status: active
-last_updated: 2026-10-26
+last_updated: 2026-10-27
 related_plan: superpowers/plans/2026-10-25-adaptive-card-interaction.md
 ---
 # 文档导航
@@ -16,5 +16,5 @@ related_plan: superpowers/plans/2026-10-25-adaptive-card-interaction.md
 | 了解裁切、保存和上一版卡片规则 | [手动裁切与 AI 入口](superpowers/specs/manual-crop-ui.md) |
 | 查看原始实施拆分 | [初始实施计划](superpowers/plans/2026-10-22-pose-atlas-implementation.md) |
 | 查看既有验收与进度 | [验收记录](superpowers/plans/acceptance.md) · [进度](superpowers/plans/progress.md) |
-| 查看 Beta 发布范围 | [Beta 发布说明](releases/v1.0.0-beta.4.md) |
+| 查看 Beta 发布范围 | [Beta 发布说明](releases/v1.0.0-beta.5.md) |
 | 发布新安装包、维护下载二维码 | [Admin 发布管理](../ADMIN.md) |
