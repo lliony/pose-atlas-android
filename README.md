@@ -4,16 +4,16 @@ Kotlin + Jetpack Compose 原生离线摄影姿势卡应用。Android 8.0（API 2
 
 ## 当前状态
 
-已实现离线图鉴、编辑与草稿、分类与回收站、卡片册、ZIP 备份、PDF/PNG 分享和可配置 AI。当前版本为 `1.0.0-beta.3`，见 [Beta 发布说明](docs/releases/v1.0.0-beta.3.md)；安装包通过 GitHub 预发布页面提供。
+已实现离线图鉴、编辑与草稿、分类与回收站、卡片册、ZIP 备份、PDF/PNG 分享和可配置 AI。当前版本为 `1.0.0-beta.4`，见 [Beta 发布说明](docs/releases/v1.0.0-beta.4.md)；安装包通过 GitHub 预发布页面提供。
 与 [设计规格](docs/superpowers/specs/2026-10-22-pose-atlas-android-design.md) 的差距和验证证据见 [验收记录](docs/superpowers/plans/acceptance.md)。
 
 文档导航见 [文档索引](docs/README.md)。
 
 ## 扫码下载 Beta
 
-[![扫码下载 v1.0.0-beta.3 APK](docs/images/beta-download-qr.png)](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.3/pose-atlas-1.0.0-beta.3-debug.apk)
+[![扫码下载 v1.0.0-beta.4 APK](docs/images/beta-download-qr.png)](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.4/pose-atlas-1.0.0-beta.4-debug.apk)
 
-[直接下载 APK](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.3/pose-atlas-1.0.0-beta.3-debug.apk) · [发布说明与附件](https://github.com/lliony/pose-atlas-android/releases/tag/v1.0.0-beta.3)
+[直接下载 APK](https://github.com/lliony/pose-atlas-android/releases/download/v1.0.0-beta.4/pose-atlas-1.0.0-beta.4-debug.apk) · [发布说明与附件](https://github.com/lliony/pose-atlas-android/releases/tag/v1.0.0-beta.4)
 
 仓库公开，扫码后可直接下载安装包，无需登录 GitHub。此安装包为调试签名 Beta 测试版。
 

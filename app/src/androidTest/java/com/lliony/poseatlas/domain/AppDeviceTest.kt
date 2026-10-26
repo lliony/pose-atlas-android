@@ -2,6 +2,8 @@ package com.lliony.poseatlas.domain
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import com.lliony.poseatlas.data.local.WorkspaceEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import com.lliony.poseatlas.MainActivity
 import com.lliony.poseatlas.PoseAtlasApplication
 import org.junit.Rule
@@ -16,6 +18,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 
 class AppDeviceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    private fun repo() = EntryPointAccessors.fromApplication(compose.activity.applicationContext, WorkspaceEntryPoint::class.java).repository()
     @Test fun detailPhotosSwipeAndKeepOnlyCurrentTeachingOnDevice() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
@@ -33,7 +36,7 @@ class AppDeviceTest {
             bitmap.recycle()
         }
         try {
-            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original.copy(images = photos)) } }
+            kotlinx.coroutines.runBlocking { repo().mutate { saveCard(original.copy(images = photos)) } }
             compose.waitUntil(10_000) { vm.state.value.cards.first { it.id == original.id }.images.first().id == photos.first().id }
             compose.onNodeWithContentDescription("查看详情：${original.title}").performClick()
             compose.onNodeWithTag("detail-photo-pager").assertIsDisplayed()
@@ -53,11 +56,11 @@ class AppDeviceTest {
             compose.onNodeWithTag("detail-photo-pager").performTouchInput { swipeRight() }
             compose.waitUntil(5_000) { compose.onAllNodesWithText("2 / 3").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("第2张独立教学").performScrollTo().assertIsDisplayed()
-            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original.copy(images = photos.take(1))) } }
+            kotlinx.coroutines.runBlocking { repo().mutate { saveCard(original.copy(images = photos.take(1))) } }
             compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("下一张图片").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("第1张独立教学").performScrollTo().assertIsDisplayed()
         } finally {
-            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original) } }
+            kotlinx.coroutines.runBlocking { repo().mutate { saveCard(original) } }
         }
     }
 
@@ -124,7 +127,7 @@ class AppDeviceTest {
         compose.onNodeWithContentDescription("查看详情：往前走，拍一个背影").performClick()
         compose.onNodeWithText("编辑").assertExists()
     }
-    @Test fun originalRatiosAndPagingKeepInsetsOnDevice() {
+    @Test fun originalRatiosAndPagingFillCardOnDevice() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
         val original = vm.state.value.cards.first()
@@ -138,18 +141,18 @@ class AppDeviceTest {
             canvas.drawLine(0f, 0f, w.toFloat(), h.toFloat(), paint)
             val bytes = java.io.ByteArrayOutputStream().apply { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, this) }.toByteArray()
             bitmap.recycle()
-            vm.repository.images.import(bytes.inputStream())
+            vm.images.import(bytes.inputStream())
         }
         try {
-            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original.copy(images = photos)) } }
+            kotlinx.coroutines.runBlocking { repo().mutate { saveCard(original.copy(images = photos)) } }
             compose.waitUntil(10_000) { vm.state.value.cards.first { it.id == original.id }.images.size == photos.size }
             ratios.forEachIndexed { index, (w, h) ->
                 compose.onNodeWithTag("library-grid").performScrollToIndex(0)
                 val image = compose.onNodeWithTag("card-photo-${original.id}", useUnmergedTree = true).getUnclippedBoundsInRoot()
                 val card = compose.onNodeWithTag("pose-card-${original.id}").getUnclippedBoundsInRoot()
                 org.junit.Assert.assertEquals(w.toFloat() / h, (image.right - image.left).value / (image.bottom - image.top).value, 0.02f)
-                org.junit.Assert.assertEquals(12f, (image.left - card.left).value, 0.6f)
-                org.junit.Assert.assertEquals(12f, (card.right - image.right).value, 0.6f)
+                org.junit.Assert.assertEquals(0f, (image.left - card.left).value, 0.6f)
+                org.junit.Assert.assertEquals(0f, (card.right - image.right).value, 0.6f)
                 val controls = compose.onNodeWithTag("card-controls-${original.id}", useUnmergedTree = true).getUnclippedBoundsInRoot()
                 org.junit.Assert.assertTrue(controls.top >= image.top && controls.bottom <= image.bottom)
                 org.junit.Assert.assertTrue(controls.left >= image.left && controls.right <= image.right)
@@ -163,7 +166,7 @@ class AppDeviceTest {
                 if (index < ratios.lastIndex) next.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
             }
         } finally {
-            kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(original) } }
+            kotlinx.coroutines.runBlocking { repo().mutate { saveCard(original) } }
         }
     }
 }
