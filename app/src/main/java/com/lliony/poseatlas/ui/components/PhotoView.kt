@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import com.lliony.poseatlas.data.image.ImageStore
+import com.lliony.poseatlas.domain.model.MediaRef
 import com.lliony.poseatlas.domain.model.Photo
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +20,7 @@ import kotlinx.coroutines.withContext
 private val panels = object : LruCache<String, Bitmap>(24 * 1024 * 1024) { override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount }
 @Composable fun PhotoView(photo: Photo, store: ImageStore, description: String, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Fit) {
     if (photo.panel == null) {
-        val model: Any? = if (photo.src.startsWith("/images/")) "file:///android_asset/seed${photo.src}" else store.file(photo.src)
+        val model: Any? = if (MediaRef.isSeed(photo.src)) "file:///android_asset/seed${photo.src}" else store.file(photo.src)
         AsyncImage(model = model, contentDescription = description, modifier = modifier, contentScale = contentScale)
     } else {
         val key = "${photo.src}:${photo.panel}"

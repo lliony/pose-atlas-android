@@ -95,4 +95,73 @@ class WorkspaceTest {
         assertThat(loaded.cards.sumOf { it.images.size }).isEqualTo(2000)
         assertThat(loaded.cards[250].title).isEqualTo("大图库编辑")
     }
+
+    // —— C1 命名写入操作 ——
+    private suspend fun albumFixture(): Triple<String, String, String> {
+        val seed = SeedLoader(context).load()
+        val ids = seed.cards.take(3).map { it.id }
+        store.replace(seed.copy(albums = listOf(Album("album-a", "甲", cardIds = listOf(ids[0], ids[1])), Album("album-b", "乙", cardIds = listOf(ids[2])))))
+        return Triple(ids[0], ids[1], ids[2])
+    }
+
+    @Test fun addToAlbumAppendsAndDeduplicates() = runTest {
+        val (c0, c1, c2) = albumFixture()
+        store.addCardsToAlbum("album-a", listOf(c1, c2))
+        assertThat(store.read().albums.single { it.id == "album-a" }.cardIds).isEqualTo(listOf(c0, c1, c2))
+    }
+    @Test fun setAlbumCardsReplacesOrder() = runTest {
+        val (c0, c1, _) = albumFixture()
+        store.setAlbumCards("album-a", listOf(c1, c0))
+        assertThat(store.read().albums.single { it.id == "album-a" }.cardIds).isEqualTo(listOf(c1, c0))
+    }
+    @Test fun moveCardInAlbumSwapsAndClamps() = runTest {
+        val (c0, c1, _) = albumFixture()
+        store.moveCardInAlbum("album-a", c1, true)   // 上移
+        assertThat(store.read().albums.single { it.id == "album-a" }.cardIds).isEqualTo(listOf(c1, c0))
+        store.moveCardInAlbum("album-a", c1, true)   // 已在顶部，钳制
+        assertThat(store.read().albums.single { it.id == "album-a" }.cardIds).isEqualTo(listOf(c1, c0))
+    }
+    @Test fun removeCardsFromAlbum() = runTest {
+        val (c0, _, _) = albumFixture()
+        store.removeCardsFromAlbum("album-a", listOf(c0))
+        assertThat(store.read().albums.single { it.id == "album-a" }.cardIds).doesNotContain(c0)
+    }
+    @Test fun reorderAlbumsClampsAtEdge() = runTest {
+        albumFixture()
+        store.reorderAlbums("album-a", true)   // 已在顶部，钳制
+        assertThat(store.read().albums.map { it.id }).isEqualTo(listOf("album-a", "album-b"))
+        store.reorderAlbums("album-a", false)  // 下移一格
+        assertThat(store.read().albums.map { it.id }).isEqualTo(listOf("album-b", "album-a"))
+    }
+    @Test fun deleteAlbumKeepsCardsAndOtherAlbums() = runTest {
+        val (c0, _, _) = albumFixture()
+        store.deleteAlbum("album-a")
+        val result = store.read()
+        assertThat(result.albums.map { it.id }).isEqualTo(listOf("album-b"))
+        assertThat(result.cards.map { it.id }).contains(c0)
+    }
+    @Test fun saveAlbumCreatesAndRenames() = runTest {
+        albumFixture()
+        store.saveAlbum("album-new", "新建册", "")
+        assertThat(store.read().albums.last().name).isEqualTo("新建册")
+        store.saveAlbum("album-new", "改名册", "描述")
+        assertThat(store.read().albums.last().name).isEqualTo("改名册")
+    }
+    @Test fun reorderCategoriesClamps() = runTest {
+        val seed = SeedLoader(context).load()
+        store.replace(seed)
+        val id = seed.categories[0].id
+        store.reorderCategories(id, true)   // 已在顶部，钳制
+        assertThat(store.read().categories.first().id).isEqualTo(id)
+        store.reorderCategories(id, false)
+        assertThat(store.read().categories.first().id).isEqualTo(seed.categories[1].id)
+    }
+    @Test fun saveCategoryRejectsDuplicateName() = runTest {
+        val seed = SeedLoader(context).load()
+        store.replace(seed)
+        val dupeName = seed.categories[0].name
+        try { store.saveCategory(seed.categories[0].copy(id = "cat-new", code = "99")) } catch (_: IllegalArgumentException) { }
+        // 重名应被拒绝：库里仍只有一个同名分类，而不是新增第二个。
+        assertThat(store.read().categories.count { it.name == dupeName }).isEqualTo(1)
+    }
 }

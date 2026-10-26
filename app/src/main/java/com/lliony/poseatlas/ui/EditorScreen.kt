@@ -22,11 +22,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lliony.poseatlas.domain.logic.nextCardCode
+import com.lliony.poseatlas.domain.logic.MAX_IMAGES_PER_CARD
 import com.lliony.poseatlas.domain.model.*
 import com.lliony.poseatlas.ui.components.PhotoView
 import com.lliony.poseatlas.ui.theme.AtlasAccentBrush
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -72,13 +71,13 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
     var leaving by remember { mutableStateOf(false) }
     val cropTarget by vm.cropSession.collectAsStateWithLifecycle()
     val editorScroll = rememberScrollState()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_IMAGES_PER_CARD)) { uris ->
         if (uris.isNotEmpty()) vm.action {
             val card = vm.editor.value?.card ?: return@action
-            require(card.images.size + uris.size <= 20) { "每张卡片最多 20 张图片" }
-            val photos = withContext(Dispatchers.IO) { uris.map { vm.repository.images.import(it) } }
+            require(card.images.size + uris.size <= MAX_IMAGES_PER_CARD) { "每张卡片最多 $MAX_IMAGES_PER_CARD 张图片" }
+            val photos = vm.importPhotos(uris)
             val currentCard = vm.editor.value?.card?.takeIf { it.id == card.id } ?: return@action
-            require(currentCard.images.size + photos.size <= 20) { "每张卡片最多 20 张图片" }
+            require(currentCard.images.size + photos.size <= MAX_IMAGES_PER_CARD) { "每张卡片最多 $MAX_IMAGES_PER_CARD 张图片" }
             vm.edit(currentCard.copy(images = currentCard.images + photos))
         }
     }
@@ -105,7 +104,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
                 itemsIndexed(card.images, key = { _, photo -> photo.id }) { index, photo ->
                     ReorderableItem(reorder, key = photo.id) {
                     OutlinedCard(onClick = { selected = index }) { Column(Modifier.padding(8.dp)) {
-                        PhotoView(photo, vm.repository.images, "第 ${index + 1} 张图片", Modifier.size(96.dp))
+                        PhotoView(photo, vm.images, "第 ${index + 1} 张图片", Modifier.size(96.dp))
                         Text(if (index == 0) "封面" else "第 ${index + 1} 张", style = MaterialTheme.typography.labelMedium)
                         if (index == selected) Text("已选中", color = MaterialTheme.colorScheme.primary)
                         Text("按住拖动排序", Modifier.longPressDraggableHandle().padding(vertical = 12.dp), style = MaterialTheme.typography.labelSmall)
@@ -113,7 +112,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
                     }
                 }
             }
-            Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy && card.images.size < 20) { Text("＋ 添加照片 (${card.images.size}/20)") }
+            Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy && card.images.size < MAX_IMAGES_PER_CARD) { Text("＋ 添加照片 (${card.images.size}/$MAX_IMAGES_PER_CARD)") }
             if (current.key == "new") AiFillBar(vm, Modifier)
             val photo = card.images.getOrNull(selected)
             if (photo != null) {

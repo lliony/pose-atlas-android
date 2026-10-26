@@ -3,6 +3,7 @@ package com.lliony.poseatlas.data.local
 import androidx.room.withTransaction
 import com.lliony.poseatlas.domain.logic.validateState
 import com.lliony.poseatlas.domain.logic.mergeStates
+import com.lliony.poseatlas.domain.logic.WorkspaceRules
 import com.lliony.poseatlas.domain.model.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
@@ -58,16 +59,46 @@ class WorkspaceStore @Inject constructor(private val db: AtlasDatabase) {
         }
         dao.deleteCategory(source)
     }
-    suspend fun saveCategories(categories: List<Category>) = db.withTransaction {
-        require(categories.map { it.name.trim() }.distinct().size == categories.size) { "分类名称不能重复" }
-        validateState(read().copy(categories = categories))
-        dao.categories(categories.mapIndexed { i, c -> CategoryRow(c.id, c.name.trim(), c.code, i) })
+    // 命名写入操作：只改写被触碰的册/分类行，不整表 replace。纯规则在 domain.logic.WorkspaceRules。
+    private suspend fun syncAlbumCards(albumId: String, cardIds: List<String>) {
+        dao.deleteAlbumCards(albumId)
+        dao.albumCards(cardIds.mapIndexed { i, c -> AlbumCardRow(albumId, c, i) })
     }
-    suspend fun saveAlbums(albums: List<Album>) = db.withTransaction {
-        validateState(read().copy(albums = albums))
-        dao.clearAlbumCards(); dao.clearAlbums()
-        dao.albums(albums.mapIndexed { i, a -> AlbumRow(a.id, a.name, a.description, i) })
-        dao.albumCards(albums.flatMap { a -> a.cardIds.mapIndexed { i, id -> AlbumCardRow(a.id, id, i) } })
+    suspend fun addCardsToAlbum(albumId: String, ids: List<String>) = db.withTransaction {
+        if (dao.album(albumId) == null) return@withTransaction
+        syncAlbumCards(albumId, WorkspaceRules.addCardIds(dao.albumCardIds(albumId).map { it.cardId }, ids))
+    }
+    suspend fun setAlbumCards(albumId: String, ids: List<String>) = db.withTransaction {
+        if (dao.album(albumId) == null) return@withTransaction
+        syncAlbumCards(albumId, ids.distinct())
+    }
+    suspend fun moveCardInAlbum(albumId: String, cardId: String, up: Boolean) = db.withTransaction {
+        if (dao.album(albumId) == null) return@withTransaction
+        syncAlbumCards(albumId, WorkspaceRules.moveInList(dao.albumCardIds(albumId).map { it.cardId }, cardId, up) { it })
+    }
+    suspend fun removeCardsFromAlbum(albumId: String, ids: List<String>) = db.withTransaction {
+        if (dao.album(albumId) == null) return@withTransaction
+        syncAlbumCards(albumId, WorkspaceRules.removeCardIds(dao.albumCardIds(albumId).map { it.cardId }, ids))
+    }
+    suspend fun saveAlbum(id: String, name: String, description: String) = db.withTransaction {
+        require(name.isNotBlank()) { "请填写名称" }
+        val existing = dao.album(id)
+        if (existing != null) dao.album(existing.copy(name = name.trim(), description = description))
+        else dao.album(AlbumRow(id, name.trim(), description, (dao.albums().maxOfOrNull { it.sort } ?: -1) + 1))
+    }
+    suspend fun deleteAlbum(albumId: String) = db.withTransaction { dao.deleteAlbum(albumId) }
+    suspend fun saveCategory(category: Category) = db.withTransaction {
+        require(category.name.isNotBlank()) { "请填写名称" }
+        require(category.code.isNotBlank()) { "请填写代码" }
+        require(dao.categories().none { it.id != category.id && it.name.trim() == category.name.trim() }) { "分类名称不能重复" }
+        val sort = dao.category(category.id)?.sort ?: ((dao.categories().maxOfOrNull { it.sort } ?: -1) + 1)
+        dao.categories(listOf(CategoryRow(category.id, category.name.trim(), category.code.trim(), sort)))
+    }
+    suspend fun reorderAlbums(albumId: String, up: Boolean) = db.withTransaction {
+        dao.albums(WorkspaceRules.moveInList(dao.albums(), albumId, up) { it.id }.mapIndexed { i, row -> row.copy(sort = i) })
+    }
+    suspend fun reorderCategories(categoryId: String, up: Boolean) = db.withTransaction {
+        dao.categories(WorkspaceRules.moveInList(dao.categories(), categoryId, up) { it.id }.mapIndexed { i, row -> row.copy(sort = i) })
     }
     suspend fun saveDraft(key: String, card: Card) = dao.draft(DraftRow(key, atlasJson.encodeToString(card), System.currentTimeMillis()))
     suspend fun draft(key: String): Card? = dao.draft(key)?.let { atlasJson.decodeFromString(it.payloadJson) }

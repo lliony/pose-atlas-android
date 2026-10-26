@@ -26,10 +26,17 @@ class AiRulesTest {
     }
     @Test fun generatedContentOnlyFillsBlankFields() {
         val card = Card("card", "category", "01-001", "已写标题", tags = listOf("保留"), notes = Notes(pose = "已写动作"))
-        val result = fillBlankFields(card, """{"title":"生成标题","tags":["生成"],"gender":"女性","styles":["自然"],"notes":{"pose":"覆盖","camera":"新机位"}}""")
+        val generated = GeneratedCard(title = "生成标题", tags = listOf("生成"), gender = "女性", styles = listOf("自然"), notes = Notes(pose = "覆盖", camera = "新机位"))
+        val result = fillBlankFields(card, generated)
         assertThat(result.title).isEqualTo("已写标题")
         assertThat(result.tags).containsExactly("保留")
         assertThat(result.notes.pose).isEqualTo("已写动作")
         assertThat(result.notes.camera).isEqualTo("新机位")
+    }
+    @Test fun parseGeneratedDecodesBoundaryJson() {
+        val generated = parseGenerated("""{"title":"生成标题","tags":["生成"],"gender":"女性","styles":["自然"],"notes":{"pose":"覆盖"}}""")
+        assertThat(generated.title).isEqualTo("生成标题")
+        assertThat(generated.styles).containsExactly("自然")
+        assertThat(generated.notes.pose).isEqualTo("覆盖")
     }
 }

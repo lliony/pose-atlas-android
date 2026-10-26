@@ -23,11 +23,12 @@ fun parseRecommendations(raw: String, candidates: Set<String>): Recommendations 
     require(parsed.recommendations.isEmpty() || valid.isNotEmpty()) { "响应异常：推荐卡片不在候选中" }
     return parsed.copy(recommendations = valid)
 }
-@Serializable private data class GeneratedCard(val title: String = "", val tags: List<String> = emptyList(), val gender: String? = null, val styles: List<String> = emptyList(), val notes: Notes = Notes())
-fun fillBlankFields(card: Card, raw: String): Card {
-    val draft = atlasJson.decodeFromString<GeneratedCard>(jsonContent(raw))
-    return card.copy(title = card.title.ifBlank { draft.title.take(28) }, tags = card.tags.ifEmpty { draft.tags.map { it.take(12) }.filter { it.isNotBlank() }.distinct().take(4) },
-        gender = card.gender?.takeIf { it.isNotBlank() } ?: draft.gender?.takeIf { it in genders },
-        styles = card.styles?.takeIf { it.isNotEmpty() } ?: draft.styles.filter { it in styles }.distinct().take(3),
-        notes = Notes.from(card.notes.values().zip(draft.notes.values()) { old, new -> old.ifBlank { new.take(80) } }))
-}
+@Serializable data class GeneratedCard(val title: String = "", val tags: List<String> = emptyList(), val gender: String? = null, val styles: List<String> = emptyList(), val notes: Notes = Notes())
+fun parseGenerated(raw: String): GeneratedCard = atlasJson.decodeFromString<GeneratedCard>(jsonContent(raw))
+fun fillBlankFields(card: Card, generated: GeneratedCard): Card = card.copy(
+    title = card.title.ifBlank { generated.title.take(28) },
+    tags = card.tags.ifEmpty { generated.tags.map { it.take(12) }.filter { it.isNotBlank() }.distinct().take(4) },
+    gender = card.gender?.takeIf { it.isNotBlank() } ?: generated.gender?.takeIf { it in genders },
+    styles = card.styles?.takeIf { it.isNotEmpty() } ?: generated.styles.filter { it in styles }.distinct().take(3),
+    notes = Notes.from(card.notes.values().zip(generated.notes.values()) { old, new -> old.ifBlank { new.take(80) } }),
+)

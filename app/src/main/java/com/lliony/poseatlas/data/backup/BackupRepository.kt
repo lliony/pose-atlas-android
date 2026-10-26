@@ -23,7 +23,7 @@ class BackupRepository @Inject constructor(@ApplicationContext private val conte
         try {
             repository.mutate {
                 val state = read()
-                val sources = state.cards.flatMap { it.images }.map { it.src }.distinct().filter { it.startsWith("/api/media/") }
+                val sources = state.cards.flatMap { it.images }.map { it.src }.distinct().filter { MediaRef.isImported(it) }
                 val present = sources.filter { repository.images.file(it)?.exists() == true }
                 missing = sources.size - present.size
                 var completed = 0
@@ -50,7 +50,7 @@ class BackupRepository @Inject constructor(@ApplicationContext private val conte
             } } ?: error("无法读取备份")
             val sizes = mutableMapOf<String, Pair<Int, Int>>()
             fun normalize(src: String, file: File) {
-                if (!src.startsWith("/api/media/")) return
+                if (!MediaRef.isImported(src)) return
                 val photo = file.inputStream().use(repository.images::import)
                 val normalized = repository.images.file(photo.src)!!
                 val target = File(workspace, "stage-${staged.size}.jpg")
@@ -105,7 +105,7 @@ class BackupRepository @Inject constructor(@ApplicationContext private val conte
                 val refs = result.cards.flatMap { it.images }.map { it.src }.toSet()
                 val kept = if (merge) referencedSources() else refs.intersect(staged.keys)
                 repository.images.cleanup(kept)
-                missing = refs.count { it.startsWith("/api/media/") && repository.images.file(it)?.exists() != true }
+                missing = refs.count { MediaRef.isImported(it) && repository.images.file(it)?.exists() != true }
             } }
             "导入完成：${result.cards.size} 张卡片、${result.categories.size} 个分类、${result.albums.size} 个卡片册；缺失 $missing 张图片"
         } finally { workspace.deleteRecursively(); progress.value = null }

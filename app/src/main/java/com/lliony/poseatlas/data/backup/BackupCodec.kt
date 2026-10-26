@@ -30,7 +30,7 @@ object BackupCodec {
         val ids = meta.state.cards.map { it.id }.toSet()
         val state = meta.state.copy(albums = meta.state.albums.map { it.copy(cardIds = it.cardIds.filter { id -> id in ids }.distinct()) })
         validateState(state)
-        require(meta.images.keys.all { it.matches(Regex("^/(api/media/[a-zA-Z0-9_-]+|images/[a-zA-Z0-9_-]+\\.png)$")) }) { "图片键不正确" }
+        require(meta.images.keys.all { MediaRef.isValid(it) }) { "图片键不正确" }
         return meta.copy(state = state)
     }
     fun validImagePath(path: String): Boolean = path.startsWith("images/") && !path.contains("..") && !path.contains('\\') && !path.contains('\u0000') && path.matches(Regex("images/[a-zA-Z0-9_.-]+"))

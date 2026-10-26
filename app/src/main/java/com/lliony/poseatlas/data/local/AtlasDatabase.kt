@@ -20,6 +20,11 @@ data class AlbumCardRow(val albumId: String, val cardId: String, val sort: Int)
     @Query("SELECT * FROM photos ORDER BY sort") suspend fun photos(): List<PhotoRow>
     @Query("SELECT * FROM albums ORDER BY sort") suspend fun albums(): List<AlbumRow>
     @Query("SELECT * FROM album_cards ORDER BY sort") suspend fun albumCards(): List<AlbumCardRow>
+    @Query("SELECT * FROM albums WHERE id = :id") suspend fun album(id: String): AlbumRow?
+    @Query("SELECT * FROM album_cards WHERE albumId = :albumId ORDER BY sort") suspend fun albumCardIds(albumId: String): List<AlbumCardRow>
+    @Query("DELETE FROM album_cards WHERE albumId = :albumId") suspend fun deleteAlbumCards(albumId: String)
+    @Query("DELETE FROM albums WHERE id = :id") suspend fun deleteAlbum(id: String)
+    @Query("SELECT * FROM categories WHERE id = :id") suspend fun category(id: String): CategoryRow?
     @Query("SELECT * FROM drafts WHERE cardId = :id") suspend fun draft(id: String): DraftRow?
     @Query("SELECT * FROM drafts") suspend fun drafts(): List<DraftRow>
     @Query("SELECT value FROM metadata WHERE `key` = :key") suspend fun metadata(key: String): String?
@@ -28,6 +33,7 @@ data class AlbumCardRow(val albumId: String, val cardId: String, val sort: Int)
     @Upsert suspend fun cards(rows: List<CardRow>)
     @Upsert suspend fun photos(rows: List<PhotoRow>)
     @Upsert suspend fun albums(rows: List<AlbumRow>)
+    @Upsert suspend fun album(row: AlbumRow)
     @Upsert suspend fun albumCards(rows: List<AlbumCardRow>)
     @Upsert suspend fun draft(row: DraftRow)
     @Upsert suspend fun metadata(row: MetadataRow)

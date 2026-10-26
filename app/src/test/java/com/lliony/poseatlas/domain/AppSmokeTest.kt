@@ -4,6 +4,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.lliony.poseatlas.MainActivity
 import com.lliony.poseatlas.PoseAtlasApplication
+import com.lliony.poseatlas.data.local.WorkspaceEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +18,7 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AppSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    private fun repo() = EntryPointAccessors.fromApplication(compose.activity.applicationContext, WorkspaceEntryPoint::class.java).repository()
     @Test fun systemBarIconsFollowTheInAppTheme() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
@@ -66,8 +69,8 @@ class AppSmokeTest {
         val bitmap = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
         val bytes = java.io.ByteArrayOutputStream().apply { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, this) }.toByteArray()
         bitmap.recycle()
-        val photo = vm.repository.images.import(bytes.inputStream())
-        val file = vm.repository.images.file(photo.src)!!
+        val photo = vm.images.import(bytes.inputStream())
+        val file = vm.images.file(photo.src)!!
         val originalBytes = file.readBytes()
         compose.runOnIdle { vm.edit(vm.editor.value!!.card.copy(images = listOf(photo))); vm.beginCrop(photo) }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("crop-canvas").fetchSemanticsNodes().isNotEmpty() }
@@ -92,10 +95,10 @@ class AppSmokeTest {
             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, this)
         }.toByteArray()
         bitmap.recycle()
-        val photo = vm.repository.images.import(bytes.inputStream())
+        val photo = vm.images.import(bytes.inputStream())
         val card = vm.state.value.cards.first()
         kotlinx.coroutines.runBlocking {
-            vm.repository.mutate { saveCard(card.copy(images = listOf(photo))) }
+            repo().mutate { saveCard(card.copy(images = listOf(photo))) }
         }
         compose.waitUntil(10_000) {
             compose.runOnIdle { vm.state.value.cards.first { it.id == card.id }.images.single().id == photo.id }
@@ -112,7 +115,7 @@ class AppSmokeTest {
             card.images.single().copy(id = "detail-photo-$index", width = w, height = h,
                 notes = com.lliony.poseatlas.domain.model.Notes(pose = "第${index + 1}张独立教学"))
         }
-        kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(card.copy(images = photos)) } }
+        kotlinx.coroutines.runBlocking { repo().mutate { saveCard(card.copy(images = photos)) } }
         compose.waitUntil(10_000) { vm.state.value.cards.first { it.id == id }.images.size == 3 }
         compose.onNodeWithContentDescription("查看详情：${card.title}").performClick()
         compose.onNodeWithTag("detail-photo-pager").assertIsDisplayed()
@@ -131,7 +134,7 @@ class AppSmokeTest {
         compose.onNodeWithContentDescription("下一张图片").performScrollTo().performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("3 / 3").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("下一张图片").assertIsNotEnabled()
-        kotlinx.coroutines.runBlocking { vm.repository.mutate { saveCard(card.copy(images = photos.take(1))) } }
+        kotlinx.coroutines.runBlocking { repo().mutate { saveCard(card.copy(images = photos.take(1))) } }
         compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("下一张图片").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithText("第1张独立教学").performScrollTo().assertIsDisplayed()
     }
@@ -154,7 +157,7 @@ class AppSmokeTest {
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
         val card = vm.state.value.cards.first { it.id == id }
         kotlinx.coroutines.runBlocking {
-            vm.repository.mutate { saveCard(card.copy(code = "01\n02\n03\n04\n05")) }
+            repo().mutate { saveCard(card.copy(code = "01\n02\n03\n04\n05")) }
         }
         compose.waitUntil(10_000) {
             compose.onAllNodesWithText("01\n02\n03\n04\n05").fetchSemanticsNodes().isNotEmpty()
@@ -244,7 +247,7 @@ class AppSmokeTest {
     @Test fun emptyReplacementKeepsCategoryRecoveryAvailable() {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
-        kotlinx.coroutines.runBlocking { vm.repository.mutate { replace(com.lliony.poseatlas.domain.model.State.Empty) } }
+        kotlinx.coroutines.runBlocking { repo().mutate { replace(com.lliony.poseatlas.domain.model.State.Empty) } }
         compose.onNodeWithContentDescription("管理分类").assertExists()
         compose.onNodeWithContentDescription("管理分类").performClick()
         compose.onNodeWithText("新增").assertExists()

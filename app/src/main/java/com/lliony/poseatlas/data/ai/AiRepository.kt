@@ -81,10 +81,10 @@ class AiRepository @Inject constructor(private val images: ImageStore) {
         require(payload.length <= 120_000) { "候选资料过多，请缩小推荐范围" }
         return parseRecommendations(request(profile, RECOMMEND_PROMPT, payload, photo), candidates.map { it.id }.toSet())
     }
-    suspend fun fill(profile: AiProfile, card: Card, category: String): Card {
+    suspend fun fill(profile: AiProfile, card: Card, category: String): GeneratedCard {
         require(card.title.isNotBlank() || card.images.isNotEmpty()) { "请先添加图片或标题" }
         val input = buildJsonObject { put("title", card.title); put("category", category) }.toString()
-        return fillBlankFields(card, request(profile, DRAFT_PROMPT, input, card.images.firstOrNull()))
+        return parseGenerated(request(profile, DRAFT_PROMPT, input, card.images.firstOrNull()))
     }
     private fun imageData(photo: Photo): String {
         val source = images.decode(photo, 1600) ?: throw IllegalArgumentException("无法读取 AI 输入图片")
