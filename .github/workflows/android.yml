@@ -61,6 +61,21 @@ jobs:
           cd release
           sha256sum pose-atlas-*.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate APK download QR code
+        run: |
+          python -m pip install 'qrcode[pil]==8.2'
+          python - <<'PYTHON'
+          import os
+          import qrcode
+          tag = os.environ["GITHUB_REF_NAME"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          version = tag.removeprefix("v")
+          url = f"https://github.com/{repo}/releases/download/{tag}/pose-atlas-{version}-debug.apk"
+          qrcode.make(url).save("release/beta-download-qr.png")
+          PYTHON
       - name: Collect release notes
         run: |
           notes="docs/releases/${GITHUB_REF_NAME}.md"
@@ -69,6 +84,11 @@ jobs:
           else
             printf '# 姿势图鉴 Android %s\n' "$GITHUB_REF_NAME" > release-notes.md
           fi
+      - name: Include download QR in release notes
+        run: |
+          if ! grep -q "releases/download/${GITHUB_REF_NAME}/beta-download-qr.png" release-notes.md; then
+            printf '\n\n## 扫码下载\n\n![扫码下载 APK](https://github.com/%s/releases/download/%s/beta-download-qr.png)\n' "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" >> release-notes.md
+          fi
       - uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, '-') }}
@@ -76,4 +96,5 @@ jobs:
           files: |
             release/pose-atlas-*.apk
             release/SHA256SUMS.txt
+            release/beta-download-qr.png
           fail_on_unmatched_files: true
