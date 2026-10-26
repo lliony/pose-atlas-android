@@ -11,6 +11,11 @@ import com.lliony.poseatlas.data.image.ImageStore
 import com.lliony.poseatlas.domain.logic.*
 import com.lliony.poseatlas.domain.model.*
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.HttpClient
+import io.ktor.client.request.*
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.content.TextContent
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -22,7 +27,9 @@ import javax.inject.Inject
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 
-@Serializable data class AiProfile(val id: String, val name: String, val baseUrl: String, val apiKey: String, val model: String, val remember: Boolean = true)
+@Serializable enum class AiFormat(val label: String) { OPENAI("OpenAI"), ANTHROPIC("Anthropic") }
+
+@Serializable data class AiProfile(val id: String, val name: String, val baseUrl: String, val apiKey: String, val model: String, val remember: Boolean = true, val format: AiFormat = AiFormat.OPENAI)
 @Serializable data class AiConfiguration(val profiles: List<AiProfile> = emptyList(), val recommendId: String? = null, val draftId: String? = null)
 private class AiRequestFailure(message: String) : IOException(message)
 class AiRepository @Inject constructor(private val images: ImageStore) {
@@ -53,19 +60,33 @@ class AiRepository @Inject constructor(private val images: ImageStore) {
                 response
             }
         } }
-        val client = OpenAI(OpenAIConfig(token = profile.apiKey, host = OpenAIHost(baseUrl), logging = LoggingConfig(logLevel = LogLevel.None), timeout = Timeout(socket = 60.seconds), retry = RetryStrategy(maxRetries = 0), engine = engine))
         try {
-            val user = if (photo == null) ChatMessage.User(text) else ChatMessage.User(listOf(TextPart(text), ImagePart(imageData(photo))))
             withTimeout(60_000) {
-                client.chatCompletion(ChatCompletionRequest(model = ModelId(profile.model), messages = listOf(ChatMessage.System(system), user))).choices.firstOrNull()?.message?.content
-                    ?: throw IllegalArgumentException("服务返回格式不正确，确认兼容 Chat Completions")
+                if (profile.format == AiFormat.ANTHROPIC) {
+                    val client = HttpClient(engine)
+                    try {
+                        val response = client.post(baseUrl + "messages") {
+                            header("x-api-key", profile.apiKey)
+                            header("anthropic-version", "2023-06-01")
+                            setBody(TextContent(anthropicBody(profile.model, system, text, photo?.let { imageData(it) }).toString(), ContentType.Application.Json))
+                        }
+                        anthropicText(response.bodyAsText())
+                    } finally { client.close() }
+                } else {
+                    val client = OpenAI(OpenAIConfig(token = profile.apiKey, host = OpenAIHost(baseUrl), logging = LoggingConfig(logLevel = LogLevel.None), timeout = Timeout(socket = 60.seconds), retry = RetryStrategy(maxRetries = 0), engine = engine))
+                    try {
+                        val user = if (photo == null) ChatMessage.User(text) else ChatMessage.User(listOf(TextPart(text), ImagePart(imageData(photo))))
+                        client.chatCompletion(ChatCompletionRequest(model = ModelId(profile.model), messages = listOf(ChatMessage.System(system), user))).choices.firstOrNull()?.message?.content
+                            ?: throw IllegalArgumentException("服务返回格式不正确，确认兼容 Chat Completions")
+                    } finally { client.close() }
+                }
             }
         } catch (e: TimeoutCancellationException) { throw IllegalArgumentException("请求超时，检查网络后重试") }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) {
             val known = generateSequence<Throwable>(e) { it.cause }.filterIsInstance<AiRequestFailure>().firstOrNull()
             throw IllegalArgumentException(known?.message ?: if (e is IllegalArgumentException) e.message else "网络不可用或服务返回格式不正确", e)
-        } finally { client.close() }
+        } finally { engine.close() }
     }
     suspend fun recommend(profile: AiProfile, cards: List<Card>, categories: List<Category>, description: String, mode: String, photo: Photo?): Recommendations {
         require(description.isNotBlank() || photo != null) { "请填写描述或选择图片" }

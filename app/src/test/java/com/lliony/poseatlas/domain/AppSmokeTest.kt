@@ -104,6 +104,16 @@ class AppSmokeTest {
         return card.id
     }
 
+    @Test fun tallDetailPhotoReservesItsFullHeightBeforeTeachingText() {
+        val id = showRatioPhoto(90, 400)
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val card = vm.state.value.cards.first { it.id == id }
+        compose.onNodeWithContentDescription("查看详情：${card.title}").performClick()
+        val pager = compose.onNodeWithTag("detail-photo-pager").getUnclippedBoundsInRoot()
+        org.junit.Assert.assertEquals("长图必须占据完整高度，避免溢出到文字区域", (pager.right - pager.left).value * 400f / 90f, (pager.bottom - pager.top).value, 2f)
+        compose.onNodeWithText("分享此图的卡片正反面").performScrollTo().assertIsDisplayed()
+    }
+
     @Test fun detailPhotosSwipeInOneAreaAndNotesFollowTheCurrentPhoto() {
         val id = showRatioPhoto(160, 90)
         val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
@@ -136,16 +146,17 @@ class AppSmokeTest {
         compose.onNodeWithText("第1张独立教学").performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun cardPhotoUsesItsOwnAspectAndHasRealInsets() {
+    @Test fun cardPhotoFillsCardAtItsOwnAspect() {
         listOf(90 to 160, 100 to 100, 120 to 160, 160 to 90, 100 to 150, 160 to 120).forEach { (w, h) ->
             val id = showRatioPhoto(w, h)
             compose.onNodeWithTag("library-grid").performScrollToIndex(0)
             val photo = compose.onNodeWithTag("card-photo-$id", useUnmergedTree = true).getUnclippedBoundsInRoot()
             val card = compose.onNodeWithTag("pose-card-$id").getUnclippedBoundsInRoot()
             org.junit.Assert.assertEquals(w.toFloat() / h, (photo.right - photo.left).value / (photo.bottom - photo.top).value, 0.02f)
-            org.junit.Assert.assertTrue(photo.left.value - card.left.value >= 11.5f)
-            org.junit.Assert.assertTrue(card.right.value - photo.right.value >= 11.5f)
-            org.junit.Assert.assertTrue(photo.top.value - card.top.value >= 11.5f)
+            org.junit.Assert.assertEquals(card.left.value, photo.left.value, 1f)
+            org.junit.Assert.assertEquals(card.right.value, photo.right.value, 1f)
+            org.junit.Assert.assertEquals(card.top.value, photo.top.value, 1f)
+            org.junit.Assert.assertEquals(card.bottom.value, photo.bottom.value, 1f)
         }
     }
     @Test fun longCodeDoesNotChangeTheSamePhotoCardHeight() {
@@ -263,4 +274,50 @@ class AppSmokeTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText("保留的新卡草稿").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("已恢复上次未保存的修改").assertExists()
     }
+    @Test fun recommendationCardsReturnToSameOverlayForToolbarAndSystemBack() {
+        compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val card = vm.state.value.cards.first()
+        compose.runOnIdle {
+            vm.recommendationSession.apply {
+                description.value = "窗边人像"
+                resultScope.value = setOf(card.id)
+                result.value = com.lliony.poseatlas.domain.logic.Recommendations("不应显示的场景描述", listOf(
+                    com.lliony.poseatlas.domain.logic.Recommendation(card.id, "不应显示的原因", "不应显示的建议")))
+            }
+        }
+        compose.onNodeWithContentDescription("打开模型推荐").performClick()
+        val resultCard = compose.onNodeWithTag("recommendation-card-${card.id}")
+        resultCard.performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("不应显示的原因").assertDoesNotExist()
+        compose.onNodeWithText("不应显示的建议").assertDoesNotExist()
+        compose.onNodeWithText("不应显示的场景描述").assertDoesNotExist()
+        val scroll = compose.runOnIdle { vm.recommendationSession.scroll.value }
+        resultCard.performClick()
+        compose.onNodeWithTag("detail-photo-pager").assertExists()
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithText("AI 姿势推荐").assertExists()
+        resultCard.assertIsDisplayed()
+        org.junit.Assert.assertEquals(scroll, compose.runOnIdle { vm.recommendationSession.scroll.value })
+        resultCard.performClick()
+        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithText("AI 姿势推荐").assertExists()
+        resultCard.assertIsDisplayed()
+        compose.onNodeWithContentDescription("收起模型推荐").performClick()
+        compose.onNodeWithText("图鉴").assertIsSelected()
+    }
+    @Test fun albumCardDetailReturnsToOriginatingAlbum() {
+        compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("新建卡片").fetchSemanticsNodes().isNotEmpty() }
+        val vm = androidx.lifecycle.ViewModelProvider(compose.activity)[com.lliony.poseatlas.ui.AtlasViewModel::class.java]
+        val album = vm.state.value.albums.first()
+        val card = vm.state.value.cards.first { it.id in album.cardIds }
+        compose.onNodeWithText("卡片册").performClick()
+        compose.onNodeWithText(album.name).performClick()
+        compose.onNodeWithText(card.title).performScrollTo().performClick()
+        compose.onNodeWithTag("detail-photo-pager").assertExists()
+        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithText(album.name).assertExists()
+        compose.onNodeWithText("打印 / PDF").assertExists()
+    }
+
 }

@@ -8,7 +8,7 @@ import java.net.URI
 fun normalizeAiUrl(input: String): String {
     val uri = runCatching { URI(input.trim()) }.getOrElse { throw IllegalArgumentException("模型地址无效") }
     require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.query == null && uri.fragment == null) { "请填写不含凭据、查询参数或片段的 HTTPS 地址" }
-    return input.trim().trimEnd('/').removeSuffix("/chat/completions") + "/"
+    return input.trim().trimEnd('/').removeSuffix("/chat/completions").removeSuffix("/messages") + "/"
 }
 @Serializable data class Recommendation(val cardId: String, val reason: String = "", val adjustment: String = "")
 @Serializable data class Recommendations(val sceneSummary: String = "", val recommendations: List<Recommendation>)

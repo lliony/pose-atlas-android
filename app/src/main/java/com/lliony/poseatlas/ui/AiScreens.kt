@@ -15,9 +15,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -47,10 +51,10 @@ import java.util.UUID
         PageTitle("AI 模型档案", back) { TextButton(onClick = { editing = AiProfile(UUID.randomUUID().toString(), "", "https://", "", "") }) { Text("新增") } }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ToggleRow("防止此页截图", secure) { secure = it }
-            Text("使用自己的兼容 Chat Completions 服务。密钥仅存本机，记住时使用 Android Keystore 加密。", style = MaterialTheme.typography.bodySmall)
+            Text("支持 OpenAI Chat Completions 和 Anthropic Messages。密钥仅存本机，记住时使用 Android Keystore 加密。", style = MaterialTheme.typography.bodySmall)
             config.profiles.forEach { profile -> OutlinedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
                 Text(profile.name, style = MaterialTheme.typography.titleMedium)
-                Text("${URI(profile.baseUrl).host} · ${profile.model}", style = MaterialTheme.typography.bodySmall)
+                Text("${profile.format.label} · ${URI(profile.baseUrl).host} · ${profile.model}", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = { editing = profile }) { Text("编辑") }
                     TextButton(onClick = { vm.action("连接测试成功") { vm.ai.request(profile, "请只回复 OK。", "连接测试") } }, enabled = !busy) { Text("测试连接") }
@@ -66,6 +70,8 @@ import java.util.UUID
     }
     editing?.let { profile -> AlertDialog(onDismissRequest = { editing = null }, title = { Text("模型档案") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(profile.name, { editing = profile.copy(name = it) }, label = { Text("名称") })
+        ChoiceRow("接口格式", AiFormat.entries.map { it.label }, profile.format.label) { label -> editing = profile.copy(format = AiFormat.entries.first { it.label == label }) }
+        Text(if (profile.format == AiFormat.ANTHROPIC) "地址示例：https://api.anthropic.com/v1/" else "地址示例：https://api.openai.com/v1/", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(profile.baseUrl, { editing = profile.copy(baseUrl = it) }, label = { Text("HTTPS base URL") })
         OutlinedTextField(profile.model, { editing = profile.copy(model = it) }, label = { Text("模型 ID") })
         OutlinedTextField(profile.apiKey, { editing = profile.copy(apiKey = it) }, label = { Text("API key") }, visualTransformation = PasswordVisualTransformation())
@@ -78,6 +84,7 @@ import java.util.UUID
 }
 
 class RecommendationSession {
+    val scroll = ScrollState(0)
     val description = mutableStateOf("")
     val mode = mutableStateOf("scene")
     val scope = mutableStateOf("全部图鉴")
@@ -108,7 +115,7 @@ class RecommendationSession {
             TextButton(onClick = settings, enabled = !busy) { Text("模型设置") }
             IconButton(onClick = back) { Icon(Icons.Default.Close, "收起模型推荐") }
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(session.scroll).testTag("recommendation-scroll").imePadding().padding(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("描述这次拍摄，让模型帮你从图鉴中挑选姿势。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(
                 Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
@@ -176,31 +183,31 @@ class RecommendationSession {
                     Text("推荐结果", style = MaterialTheme.typography.titleMedium)
                     Text("${valid.size} 张姿势卡", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
-                    Text(response.sceneSummary, Modifier.fillMaxWidth().padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
                 if (valid.isEmpty()) Text("没有匹配的卡片")
-                valid.forEachIndexed { index, recommendation ->
-                    OutlinedCard(
-                        onClick = { detail(recommendation.cardId) }, modifier = Modifier.fillMaxWidth(),
+                valid.forEach { recommendation ->
+                    val card = state.cards.first { it.id == recommendation.cardId }
+                    Card(
+                        onClick = { detail(card.id) }, modifier = Modifier.fillMaxWidth().testTag("recommendation-card-${card.id}"),
                         shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
-                        Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("%02d".format(index + 1), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(state.cards.first { it.id == recommendation.cardId }.title, style = MaterialTheme.typography.titleMedium)
-                                Text(recommendation.reason, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(recommendation.adjustment, style = MaterialTheme.typography.bodyMedium)
+                        Box {
+                            card.images.firstOrNull()?.let { image ->
+                                PhotoView(image, vm.repository.images, card.title,
+                                    Modifier.fillMaxWidth().aspectRatio(photoAspect(image).toFloat()),
+                                    contentScale = ContentScale.Crop)
                             }
+                            Text("${card.code} · ${card.title}", Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.94f))))
+                                .padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 12.dp), color = Color(0xFF242424),
+                                style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
                 if (valid.isNotEmpty()) Button(
                     onClick = { addToAlbum = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     shape = MaterialTheme.shapes.medium,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.inverseSurface, contentColor = MaterialTheme.colorScheme.inverseOnSurface),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer),
                 ) { Text("将推荐结果加入卡片册") }
             }
         }

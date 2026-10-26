@@ -63,7 +63,7 @@ import java.util.UUID
                 Text("${state.cards.count { !it.deleted }} 张卡片 · ${state.categories.size} 个分类 · ${state.albums.size} 个卡片册\n${state.cards.flatMap { it.images }.map { it.src }.distinct().size} 张独立图片", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             SettingsGroup("关于") {
-                Text("姿势图鉴 1.0.0", style = MaterialTheme.typography.titleMedium)
+                UpdateSection()
                 Text("资料仅保存在本机。卸载或清除应用数据前请导出备份。\n开源组件：Jetpack Compose、Room、Hilt、Coil、Kotlinx Serialization。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(24.dp))

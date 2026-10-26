@@ -2,6 +2,7 @@
 package com.lliony.poseatlas.ui
 
 import androidx.compose.foundation.*
+import androidx.activity.compose.BackHandler
 import android.animation.ValueAnimator
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -61,7 +62,7 @@ import kotlinx.coroutines.withContext
 @Serializable data class PrintRoute(val ids: String)
 @Serializable object AiSettingsRoute
 
-@Serializable data class DetailRoute(val id: String)
+@Serializable data class DetailRoute(val id: String, val fromRecommendation: Boolean = false)
 @Serializable data class EditorRoute(val id: String)
 
 @Composable fun AtlasApp(vm: AtlasViewModel) {
@@ -119,6 +120,7 @@ import kotlinx.coroutines.withContext
                 else NavHost(nav, startDestination = LibraryRoute) {
                     composable<LibraryRoute> {
                         var selectedDetail by rememberSaveable { mutableStateOf<String?>(null) }
+                        BackHandler(wide && selectedDetail != null) { selectedDetail = null }
                         Row(Modifier.fillMaxSize()) {
                             Box(Modifier.weight(if (wide && selectedDetail != null) 0.55f else 1f)) {
                                 LibraryScreen(vm, false, { if (wide) selectedDetail = it else nav.navigate(DetailRoute(it)) }, { vm.openEditor("new"); nav.navigate(EditorRoute("new")) }, { nav.navigate(CategoriesRoute) }, { nav.navigate(PrintRoute(it.joinToString(","))) })
@@ -138,8 +140,13 @@ import kotlinx.coroutines.withContext
                     composable<PrintRoute> { entry -> PrintScreen(vm, entry.toRoute<PrintRoute>().ids.split(','), { nav.popBackStack() }) }
                     composable<CategoriesRoute> { CategoriesScreen(vm) { nav.popBackStack() } }
                     composable<DetailRoute> { entry ->
-                        val id = entry.toRoute<DetailRoute>().id
-                        DetailScreen(vm, id, { nav.popBackStack() }, { vm.openEditor(id); nav.navigate(EditorRoute(id)) })
+                        val route = entry.toRoute<DetailRoute>()
+                        val back: () -> Unit = {
+                            // 推荐弹窗不在导航栈中，弹出详情时恢复实际来源窗口。
+                            if (nav.popBackStack() && route.fromRecommendation) recommendationOpen = true
+                        }
+                        BackHandler { back() }
+                        DetailScreen(vm, route.id, back, { vm.openEditor(route.id); nav.navigate(EditorRoute(route.id)) })
                     }
                     composable<EditorRoute> { entry ->
                         val id = entry.toRoute<EditorRoute>().id
@@ -153,7 +160,7 @@ import kotlinx.coroutines.withContext
     if (recommendationOpen) {
         ModalBottomSheet(onDismissRequest = { recommendationOpen = false }, containerColor = MaterialTheme.colorScheme.surface, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Box(Modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
-                AiRecommendScreen(vm, { recommendationOpen = false }, { recommendationOpen = false; nav.navigate(AiSettingsRoute) { launchSingleTop = true } }, { id -> recommendationOpen = false; nav.navigate(DetailRoute(id)) }, recommendationSession)
+                AiRecommendScreen(vm, { recommendationOpen = false }, { recommendationOpen = false; nav.navigate(AiSettingsRoute) { launchSingleTop = true } }, { id -> recommendationOpen = false; nav.navigate(DetailRoute(id, fromRecommendation = true)) }, recommendationSession)
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).imePadding())
             }
         }
@@ -231,12 +238,11 @@ import kotlinx.coroutines.withContext
                     shape = RoundedCornerShape(26.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
-                    border = if (prefs.frame) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
                 ) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column {
                         if (rotation <= 90f) {
                             Box {
-                                PhotoView(photo, vm.repository.images, card.title, Modifier.testTag("card-photo-${card.id}").fillMaxWidth().aspectRatio(photoAspect(photo).toFloat()).clip(RoundedCornerShape(18.dp)).combinedClickable(onClickLabel = "翻面看教学", onClick = { flipped = true }, onLongClickLabel = "选择卡片", onLongClick = { selected = selected + card.id }).background(MaterialTheme.colorScheme.surfaceVariant))
+                                PhotoView(photo, vm.repository.images, card.title, Modifier.testTag("card-photo-${card.id}").fillMaxWidth().aspectRatio(photoAspect(photo).toFloat()).combinedClickable(onClickLabel = "翻面看教学", onClick = { flipped = true }, onLongClickLabel = "选择卡片", onLongClick = { selected = selected + card.id }).background(MaterialTheme.colorScheme.surfaceVariant))
                                 Row(
                                     Modifier.align(Alignment.TopEnd).padding(8.dp).testTag("card-controls-${card.id}"),
                                 ) {
@@ -251,16 +257,17 @@ import kotlinx.coroutines.withContext
                                         PhotoActionIcon(if (card.id in selected) Icons.Default.CheckCircle else Icons.Default.Add, null)
                                     }
                                 }
-                            }
-                            Column(Modifier.combinedClickable(onClick = { detail(card.id) }, onLongClick = { selected = selected + card.id }).padding(horizontal = if (phone) 8.dp else 0.dp).padding(top = 16.dp)) {
-                                Text(card.code, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(card.title, style = if (phone) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text((listOfNotNull(card.gender) + card.styles.orEmpty() + card.tags).joinToString(" · "), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-                                Text(resolveNotes(card, photo).composition, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = { page = (page - 1 + card.images.size) % card.images.size }, enabled = card.images.size > 1) { Icon(Icons.Default.ChevronLeft, "上一张图片") }
-                                    Text("${page + 1} / ${card.images.size}", Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    IconButton(onClick = { page = (page + 1) % card.images.size }, enabled = card.images.size > 1) { Icon(Icons.Default.ChevronRight, "下一张图片") }
+                                Column(Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                                    .combinedClickable(onClick = { detail(card.id) }, onLongClick = { selected = selected + card.id })
+                                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.94f))))
+                                    .padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 12.dp)) {
+                                    Text(card.code, color = Color(0xFF343434), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(card.title, color = Color(0xFF242424), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    if (card.images.size > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(onClick = { page = (page - 1 + card.images.size) % card.images.size }) { Icon(Icons.Default.ChevronLeft, "上一张图片", tint = Color.DarkGray) }
+                                        Text("${page + 1} / ${card.images.size}", color = Color.DarkGray, style = MaterialTheme.typography.labelSmall)
+                                        IconButton(onClick = { page = (page + 1) % card.images.size }) { Icon(Icons.Default.ChevronRight, "下一张图片", tint = Color.DarkGray) }
+                                    }
                                 }
                             }
                         } else Column(Modifier.testTag("card-back-${card.id}").fillMaxWidth().combinedClickable(onClickLabel = "返回正面", onClick = { flipped = false }, onLongClickLabel = "选择卡片", onLongClick = { selected = selected + card.id }).padding(20.dp)) {
@@ -306,8 +313,8 @@ import kotlinx.coroutines.withContext
 }
 
 @Composable private fun PhotoActionIcon(icon: ImageVector, description: String?) {
-    Box(Modifier.size(36.dp).background(Color.Black, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(icon, description, modifier = Modifier.size(24.dp), tint = Color.White)
+    Box(Modifier.size(36.dp).background(Color.White.copy(alpha = 0.85f), CircleShape), contentAlignment = Alignment.Center) {
+        Icon(icon, description, modifier = Modifier.size(24.dp), tint = Color(0xFF343434))
     }
 }
 
@@ -345,7 +352,8 @@ import kotlinx.coroutines.withContext
                                 state = pager,
                                 key = { card.images[it].id },
                                 modifier = Modifier.testTag("detail-photo-pager").fillMaxWidth()
-                                    .heightIn(max = 500.dp).aspectRatio(photoAspect(photo).toFloat())
+                                    // 长图按原比例占位，避免高度上限与固定宽度冲突后溢出到教学文字。
+                                    .aspectRatio(photoAspect(photo).toFloat())
                                     .clip(RoundedCornerShape(18.dp))
                             ) { index ->
                                 PhotoView(card.images[index], vm.repository.images, "${card.title}，第 ${index + 1} 张", Modifier.fillMaxSize())
@@ -361,7 +369,7 @@ import kotlinx.coroutines.withContext
                             }
                             // 教学和分享共用停稳后的照片，避免滑动途中指向不同图片。
                             NotesView(resolveNotes(card, photo))
-                            OutlinedButton(onClick = { vm.action {
+                            TextButton(onClick = { vm.action {
                                 val files = withContext(Dispatchers.IO) { vm.pdf.shareImages(card, photo, state.categories.find { it.id == card.categoryId }?.name.orEmpty()) }
                                 shareImages(context, files)
                             } }) { Text("分享此图的卡片正反面") }
@@ -369,7 +377,7 @@ import kotlinx.coroutines.withContext
                     }
                 }
                 if (card.privateNote.isNotBlank()) item { Text("私人备注 · 仅本机", style = MaterialTheme.typography.titleSmall); Text(card.privateNote) }
-                item { OutlinedButton(onClick = { vm.action(if (card.deleted) "已恢复卡片" else "已移入回收站") { vm.repository.mutate { setDeleted(setOf(card.id), !card.deleted) }; back() } }) { Text(if (card.deleted) "恢复卡片" else "移入回收站") } }
+                item { TextButton(onClick = { vm.action(if (card.deleted) "已恢复卡片" else "已移入回收站") { vm.repository.mutate { setDeleted(setOf(card.id), !card.deleted) }; back() } }) { Text(if (card.deleted) "恢复卡片" else "移入回收站") } }
             }
         }
     }
